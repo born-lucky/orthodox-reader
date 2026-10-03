@@ -1,0 +1,16 @@
+Orthodox icons in this folder are public-domain or freely licensed
+reproductions from Wikimedia Commons, used as Discord thumbnails.
+
+christ_pantocrator.jpg     Spas vsederzhitel sinay.jpg
+nativity_theotokos.jpg     Nativity of Theotokos.jpg
+nativity_christ.jpg        Nativity of christ.jpg
+theotokos_vladimir.jpg     Vladimirskaya.jpg
+annunciation.jpg           Annunciation Icon Sinai 12th century.jpg
+dormition.jpg              Dormition of the Theotokos, Novgorod.jpg
+transfiguration.jpg        Theophanes the Greek Transfiguration
+pentecost.jpg              Pentecost icon.jpg
+presentation_theotokos.jpg Presentation of Virgin Mary (icon).jpg
+apostle_paul.jpg           Apostle Paul.jpg
+evangelist_luke.jpg        Luke the Evangelist.jpg
+evangelist_mark.jpg        Mark the Evangelist.jpg
+trinity.jpg                Andrei Rublev, Hospitality of Abraham

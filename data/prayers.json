@@ -1,0 +1,80 @@
+{
+  "source": "Traditional Orthodox prayers in the older English of Hapgood's Service Book (1906) and the King James Version (1769); public domain.",
+  "opening": [
+    {
+      "title": "The Trisagion Prayers",
+      "text": [
+        "In the name of the Father, and of the Son, and of the Holy Spirit. Amen.",
+        "Glory to Thee, our God, glory to Thee.",
+        "O Heavenly King, the Comforter, the Spirit of Truth, who art everywhere present and fillest all things, Treasury of good things and Giver of life: come and abide in us, and cleanse us from every stain, and save our souls, O Good One.",
+        "Holy God, Holy Mighty, Holy Immortal, have mercy on us.",
+        "Holy God, Holy Mighty, Holy Immortal, have mercy on us.",
+        "Holy God, Holy Mighty, Holy Immortal, have mercy on us.",
+        "Glory to the Father, and to the Son, and to the Holy Spirit, now and ever, and unto ages of ages. Amen.",
+        "O Most Holy Trinity, have mercy on us. O Lord, cleanse us from our sins. O Master, pardon our transgressions. O Holy One, visit and heal our infirmities, for Thy name's sake.",
+        "Lord, have mercy. Lord, have mercy. Lord, have mercy.",
+        "Glory to the Father, and to the Son, and to the Holy Spirit, now and ever, and unto ages of ages. Amen.",
+        "Our Father, who art in heaven, hallowed be Thy name. Thy kingdom come. Thy will be done, on earth as it is in heaven. Give us this day our daily bread; and forgive us our debts, as we forgive our debtors; and lead us not into temptation, but deliver us from the evil one.",
+        "For Thine is the kingdom, and the power, and the glory, of the Father, and of the Son, and of the Holy Spirit, now and ever, and unto ages of ages. Amen."
+      ]
+    }
+  ],
+  "morning": [
+    {
+      "title": "The Symbol of Faith",
+      "text": [
+        "I believe in one God, the Father Almighty, Maker of heaven and earth, and of all things visible and invisible.",
+        "And in one Lord Jesus Christ, the Son of God, the Only-begotten, begotten of the Father before all ages; Light of Light, true God of true God; begotten, not made; of one essence with the Father, by whom all things were made;",
+        "who for us men and for our salvation came down from heaven, and was incarnate of the Holy Spirit and the Virgin Mary, and became man;",
+        "and was crucified also for us under Pontius Pilate, and suffered, and was buried; and arose again on the third day according to the Scriptures; and ascended into heaven, and sitteth at the right hand of the Father; and shall come again with glory to judge the living and the dead; whose kingdom shall have no end.",
+        "And in the Holy Spirit, the Lord, the Giver of life, who proceedeth from the Father; who with the Father and the Son together is worshipped and glorified; who spake by the prophets.",
+        "In one, holy, catholic, and apostolic Church. I acknowledge one baptism for the remission of sins. I look for the resurrection of the dead, and the life of the age to come. Amen."
+      ]
+    }
+  ],
+  "work": [
+    {
+      "title": "A Prayer Before Any Work",
+      "text": [
+        "O Lord Jesus Christ, only-begotten Son of Thy beginningless Father, Thou hast said with Thy most pure lips that without Thee we can do nothing.",
+        "My Lord, my Lord, in faith having embraced Thy words, I fall down before Thy goodness: help me, a sinner, to complete this work which I am about to begin, in Thee Thyself, in the name of the Father, and of the Son, and of the Holy Spirit. Amen."
+      ]
+    }
+  ],
+  "middle": [
+    {
+      "title": "The Jesus Prayer",
+      "text": [
+        "Lord Jesus Christ, Son of God, have mercy on me, a sinner.",
+        "Lord Jesus Christ, Son of God, have mercy on me, a sinner.",
+        "Lord Jesus Christ, Son of God, have mercy on me, a sinner."
+      ]
+    },
+    {
+      "title": "The Prayer of Saint Ephraim the Syrian",
+      "text": [
+        "O Lord and Master of my life, take from me the spirit of sloth, despondency, lust of power, and idle talk.",
+        "But grant rather the spirit of chastity, humility, patience, and love to Thy servant.",
+        "Yea, O Lord and King, grant me to see my own transgressions, and not to judge my brother; for blessed art Thou unto ages of ages. Amen."
+      ]
+    },
+    {
+      "title": "A Prayer After Any Work",
+      "text": [
+        "Thou Thyself, O Christ, art the fulfilment of all good things. Fill my soul with joy and gladness, and save me, for Thou alone art most merciful. Lord, glory to Thee."
+      ]
+    }
+  ],
+  "closing": [
+    {
+      "title": "Closing Prayers",
+      "text": [
+        "It is truly meet to bless thee, O Theotokos, ever-blessed and most pure, and the Mother of our God.",
+        "More honourable than the Cherubim, and beyond compare more glorious than the Seraphim, who without corruption gavest birth to God the Word, true Theotokos, we magnify thee.",
+        "Glory to the Father, and to the Son, and to the Holy Spirit, now and ever, and unto ages of ages. Amen.",
+        "Through the prayers of our holy fathers, Lord Jesus Christ our God, have mercy on us and save us. Amen."
+      ]
+    }
+  ],
+  "psalms": [23, 27, 34, 51, 63, 91, 103, 121, 130, 143, 145, 146]
+}

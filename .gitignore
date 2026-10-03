@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec
+.pytest_cache/
+# Your private texts are built into %APPDATA%, never here. Just in case:
+my-texts/
+*.pdf

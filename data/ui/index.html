@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reader</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23a8261b' stroke='%23c9a24a' stroke-width='3'/%3E%3Cg fill='%23f3ead6'%3E%3Crect x='29' y='9' width='6' height='46'/%3E%3Crect x='24' y='15' width='16' height='4'/%3E%3Crect x='16' y='23' width='32' height='5'/%3E%3Cpolygon points='22,43 42,37 42,41 22,47'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+@font-face { font-family: "Literata"; src: url("/fonts/Literata.ttf") format("truetype"); font-weight: 200 900; font-style: normal; }
+@font-face { font-family: "Literata"; src: url("/fonts/Literata-Italic.ttf") format("truetype"); font-weight: 200 900; font-style: italic; }
+@font-face { font-family: "Ponomar"; src: url("/fonts/Ponomar-Regular.ttf") format("truetype"); }
+
+/* ---------------------------------------------------------------- the two pages
+   Light: ink on warm parchment. Dark: the same book by lamplight.
+   Cinnabar for what you do; gold only as a hairline. */
+:root {
+  --paper: #f2e9d5; --paper-2: #ebe1ca; --card: rgba(255, 252, 244, .55); --line: rgba(120, 96, 52, .22);
+  --ink: #221b14; --ink-2: #5d5143; --ink-3: #8f8270;
+  --red: #a8261b; --red-hover: #8f1f16; --red-soft: rgba(168, 38, 27, .09); --on-red: #fbf5e8;
+  --gold: #a9822f; --track: rgba(80, 60, 30, .14); --shadow: 0 1px 2px rgba(60, 40, 10, .08), 0 6px 20px rgba(60, 40, 10, .07);
+  --grain-opacity: .16; --grain-blend: multiply;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --paper: #17130f; --paper-2: #1d1813; --card: rgba(255, 240, 210, .035); --line: rgba(201, 162, 74, .16);
+  --ink: #ece2cd; --ink-2: #b4a68e; --ink-3: #7d7060;
+  --red: #d0584a; --red-hover: #e06a5b; --red-soft: rgba(208, 88, 74, .13); --on-red: #1a120d;
+  --gold: #c4a058; --track: rgba(255, 235, 200, .1); --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+  --grain-opacity: .22; --grain-blend: screen;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: radial-gradient(ellipse at 50% 0%, var(--paper) 30%, var(--paper-2) 100%) fixed;
+  color: var(--ink);
+  font: 400 15.5px/1.5 "Literata", Georgia, serif;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  transition: background-color .3s ease, color .3s ease;
+}
+/* The matte finish: fine paper grain over everything, never in the way. */
+body::before {
+  content: ""; position: fixed; inset: -50%; pointer-events: none; z-index: 100;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .42 0 0 0 0 .3 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: var(--grain-opacity); mix-blend-mode: var(--grain-blend);
+}
+body::after { /* a soft vignette, like the edge of a page */
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 99;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(60, 40, 10, .10) 100%);
+}
+:root[data-theme="dark"] body::after { background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, .35) 100%); }
+
+main { max-width: 500px; margin: 0 auto; padding: 22px 26px 40px; opacity: 0; transform: translateY(6px);
+       transition: opacity .5s ease, transform .5s cubic-bezier(.2, .7, .2, 1); }
+main.ready { opacity: 1; transform: none; }
+
+/* ---------------------------------------------------------------- heading */
+.head { text-align: center; }
+.headpiece { display: block; width: 100%; height: 22px; color: var(--gold); }
+.headpiece .cross { fill: var(--red); }
+.icon { width: 132px; aspect-ratio: 3 / 4; margin: 14px auto 10px; border-radius: 3px; overflow: hidden;
+        outline: 1px solid var(--gold); outline-offset: 4px; box-shadow: var(--shadow); background: var(--paper-2);
+        transition: transform .4s cubic-bezier(.2, .7, .2, 1), box-shadow .4s ease; }
+.icon:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(60,40,10,.1), 0 14px 32px rgba(60,40,10,.14); }
+.icon img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .6s ease; }
+.icon img.loaded { opacity: 1; }
+h1 { font: 400 40px/1 "Ponomar", "Literata", serif; margin: 14px 0 6px; letter-spacing: .5px; }
+h1 b { color: var(--red); font-weight: 400; font-size: 1.2em; }
+.date { color: var(--ink-2); font-style: italic; font-size: 14px; }
+.feast { color: var(--red); font-size: 14.5px; margin-top: 2px; min-height: 1.4em; }
+
+/* ---------------------------------------------------------------- status */
+.status { margin: 22px 0 16px; padding: 16px 18px; border-radius: 14px; background: var(--card);
+          border: 1px solid var(--line); box-shadow: var(--shadow); display: flex; align-items: center; gap: 14px; }
+.status .text { flex: 1; min-width: 0; }
+.status .big { font-size: 19px; font-weight: 500; letter-spacing: -.1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status .small { color: var(--ink-3); font-size: 13px; }
+.bar { height: 3px; border-radius: 3px; background: var(--track); margin-top: 9px; overflow: hidden; transition: opacity .3s ease; }
+.bar i { display: block; height: 100%; width: 0; background: var(--red); border-radius: 3px; transition: width 1s linear; }
+
+/* ---------------------------------------------------------------- buttons */
+.actions { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; -webkit-tap-highlight-color: transparent; }
+.btn { padding: 10px 12px; border-radius: 10px; font-size: 14.5px; font-weight: 500; border: 1px solid var(--line);
+       background: var(--card); color: var(--ink);
+       transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .12s ease, box-shadow .18s ease; }
+.btn:hover { border-color: var(--red); color: var(--red); }
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--red); border-color: var(--red); color: var(--on-red); box-shadow: 0 1px 2px rgba(120, 20, 10, .2); }
+.btn.primary:hover { background: var(--red-hover); border-color: var(--red-hover); color: var(--on-red); box-shadow: 0 4px 14px rgba(150, 30, 20, .22); }
+.btn.stop { width: 100%; display: none; }
+.reading .actions { display: none; }
+.reading .btn.stop { display: block; }
+:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; border-radius: 8px; }
+
+/* ---------------------------------------------------------------- groups */
+h2 { font: 400 15px/1 "Ponomar", "Literata", serif; color: var(--red); letter-spacing: .6px; margin: 26px 4px 8px; }
+.group { background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 14px; min-height: 50px;
+       transition: background-color .15s ease; }
+.row + .row { border-top: 1px solid var(--line); }
+.row:hover { background: var(--red-soft); }
+.row label, .row .label { flex: 1; cursor: pointer; }
+.row .sub { display: block; color: var(--ink-3); font-size: 12.5px; }
+.row.stack { flex-direction: column; align-items: stretch; gap: 8px; }
+
+/* segmented control: the chosen one is filled, the highlight slides */
+.seg { position: relative; display: flex; padding: 3px; border-radius: 10px; background: var(--track); isolation: isolate; }
+.seg button { position: relative; z-index: 1; flex: 1; padding: 6px 8px; border-radius: 8px; font-size: 13.5px; font-weight: 500;
+              color: var(--ink-2); white-space: nowrap; transition: color .2s ease; }
+.seg button:hover { color: var(--ink); }
+.seg button.on { color: var(--on-red); }
+.seg .thumb { position: absolute; z-index: 0; top: 3px; bottom: 3px; left: 0; width: 0; border-radius: 8px; background: var(--red);
+              box-shadow: 0 1px 3px rgba(120, 20, 10, .25); transition: transform .28s cubic-bezier(.3, .7, .2, 1), width .28s cubic-bezier(.3, .7, .2, 1); }
+
+/* switch */
+.switch { position: relative; width: 46px; height: 28px; flex: none; border-radius: 28px; background: var(--track);
+          transition: background-color .22s ease; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+                 background: #fffaf0; box-shadow: 0 1px 3px rgba(0, 0, 0, .25);
+                 transition: transform .26s cubic-bezier(.3, .7, .2, 1.15), width .15s ease; }
+.switch.on { background: var(--red); }
+.switch.on::after { transform: translateX(18px); }
+.switch:active::after { width: 26px; }
+.switch.on:active::after { transform: translateX(14px); }
+
+/* stepper */
+.step { display: inline-flex; align-items: center; border-radius: 10px; background: var(--track); padding: 2px; flex: none; }
+.step button { width: 30px; height: 30px; border-radius: 8px; font-size: 18px; line-height: 1; color: var(--red);
+               transition: background-color .15s ease, transform .1s ease; }
+.step button:hover { background: var(--red-soft); }
+.step button:active { transform: scale(.9); }
+.step output { min-width: 64px; text-align: center; font-size: 14px; font-variant-numeric: tabular-nums; }
+.step.wide output { min-width: 190px; }
+.hear { color: var(--red); font-size: 13.5px; padding: 4px 8px; border-radius: 8px; transition: background-color .15s ease; }
+.hear:hover { background: var(--red-soft); }
+
+/* fast badge: strict = solid, relaxed = ring, none = quiet */
+.fast { display: inline-flex; align-items: center; gap: 7px; margin-top: 10px; padding: 4px 12px 4px 10px; border-radius: 20px;
+        font-size: 13px; background: var(--red-soft); color: var(--red); opacity: 0; transition: opacity .4s ease; }
+.fast.shown { opacity: 1; }
+.fast.none { background: var(--track); color: var(--ink-2); }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot.strict { background: var(--red); }
+.dot.relaxed { border: 1.6px solid var(--red); }
+.dot.none { background: var(--ink-3); opacity: .5; }
+
+/* calendar */
+.cal { padding: 12px 12px 4px; }
+.calhead { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 8px; }
+.calhead span { font: 400 16px "Ponomar", "Literata", serif; letter-spacing: .4px; }
+.calhead button { width: 32px; height: 32px; border-radius: 8px; color: var(--red); font-size: 18px; transition: background-color .15s ease, transform .1s ease; }
+.calhead button:hover { background: var(--red-soft); }
+.calhead button:active { transform: scale(.9); }
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; transition: opacity .2s ease; }
+.grid.fading { opacity: 0; }
+.wd { text-align: center; font-size: 11px; color: var(--ink-3); padding: 2px 0 6px; letter-spacing: .5px; }
+.cell { position: relative; height: 44px; border-radius: 9px; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 3px; font-size: 14px; font-variant-numeric: tabular-nums; cursor: pointer; color: var(--ink);
+        transition: background-color .15s ease, transform .12s ease, box-shadow .15s ease; }
+.cell:hover { background: var(--red-soft); }
+.cell:active { transform: scale(.94); }
+.cell.today { box-shadow: inset 0 0 0 1.5px var(--red); }
+.cell.sel { background: var(--red); color: var(--on-red); }
+.cell.sel .dot.strict { background: var(--on-red); }
+.cell.sel .dot.relaxed { border-color: var(--on-red); }
+.cell.great b, .cell.vigil b { color: var(--red); }
+.cell.sel b { color: var(--on-red); }
+.cell .mk { position: absolute; top: 3px; right: 5px; font-size: 9px; color: var(--red); }
+.cell.sel .mk { color: var(--on-red); }
+.cell b { font-weight: 500; }
+.cell .dot { width: 6px; height: 6px; }
+.legend { display: flex; gap: 14px; justify-content: center; font-size: 11.5px; color: var(--ink-3); padding: 10px 0 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.detail { border-top: 1px solid var(--line); margin: 4px -12px 0; padding: 14px 16px 16px; transition: opacity .25s ease; }
+.detail.fading { opacity: 0; }
+.detail .when { color: var(--ink-3); font-size: 12.5px; font-style: italic; }
+.detail .title { font-size: 16px; font-weight: 500; margin: 2px 0 8px; }
+.detail .fast { margin: 0 0 10px; opacity: 1; }
+.detail ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 13.5px; }
+.detail li { margin: 2px 0; }
+.detail .refs { margin-top: 8px; font-size: 13px; color: var(--ink-2); }
+.detail .refs b { color: var(--red); font-weight: 500; }
+
+footer { text-align: center; color: var(--ink-3); font-size: 12px; font-style: italic; margin-top: 28px; }
+
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+</style>
+</head>
+<body>
+<main id="main">
+  <div class="head">
+    <svg class="headpiece" viewBox="0 0 500 22" preserveAspectRatio="none" aria-hidden="true">
+      <g stroke="currentColor" stroke-width="1"><line x1="0" y1="8" x2="222" y2="8"/><line x1="0" y1="14" x2="222" y2="14"/>
+      <line x1="278" y1="8" x2="500" y2="8"/><line x1="278" y1="14" x2="500" y2="14"/></g>
+      <g fill="currentColor"><path d="M40 7l4 4-4 4-4-4z"/><path d="M110 7l4 4-4 4-4-4z"/><path d="M180 7l4 4-4 4-4-4z"/>
+      <path d="M320 7l4 4-4 4-4-4z"/><path d="M390 7l4 4-4 4-4-4z"/><path d="M460 7l4 4-4 4-4-4z"/></g>
+      <g class="cross"><rect x="248.5" y="1" width="3" height="20"/><rect x="246" y="4" width="8" height="2"/><rect x="242" y="8" width="16" height="2.4"/><path d="M244 16l12-3v2l-12 3z"/></g>
+    </svg>
+    <div class="icon"><img id="icon" alt=""></div>
+    <h1><b>R</b>eader</h1>
+    <div class="date" id="date"></div>
+    <div class="feast" id="feast"></div>
+    <div class="fast" id="fast"><span class="dot"></span><span></span></div>
+  </div>
+
+  <div class="status">
+    <div class="text">
+      <div class="big" id="next">…</div>
+      <div class="small" id="sub"></div>
+      <div class="bar"><i id="bar"></i></div>
+    </div>
+    <div class="switch" id="enabled" role="switch" tabindex="0" title="Breaks"></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn primary" data-do="break">Break now</button>
+    <button class="btn" data-do="listen">Listen</button>
+    <button class="btn" data-do="today">Today</button>
+  </div>
+  <button class="btn stop" data-do="stop">Stop reading</button>
+
+  <h2>Calendar</h2>
+  <div class="group cal">
+    <div class="calhead"><button id="prev" aria-label="Previous month">‹</button><span id="mname"></span><button id="nextm" aria-label="Next month">›</button></div>
+    <div class="grid" id="grid"></div>
+    <div class="legend"><span><i class="dot strict"></i>Strict fast</span><span><i class="dot relaxed"></i>Fish, wine or oil</span><span><span style="color:var(--red)">✚</span>Great feast</span></div>
+    <div class="detail" id="detail"></div>
+  </div>
+
+  <h2>Break</h2>
+  <div class="group">
+    <div class="row stack"><span class="label">During a break</span>
+      <div class="seg" data-key="mode"><button data-v="lock">Lock screen</button><button data-v="listen">Audio only</button></div></div>
+    <div class="row stack"><span class="label">The screen shows</span>
+      <div class="seg" data-key="screen"><button data-v="icon">Icon</button><button data-v="text">Text</button><button data-v="black">Black</button></div></div>
+    <div class="row"><label>Text window in audio mode</label><div class="switch" data-key="read_along"></div></div>
+    <div class="row"><label>Emergency exit<span class="sub">Hold Ctrl + Alt + Shift + End</span></label><div class="switch" data-key="emergency_exit"></div></div>
+  </div>
+
+  <h2>Reading</h2>
+  <div class="group">
+    <div class="row stack">
+      <div class="seg" data-key="content"><button data-v="mixed">Mixed</button><button data-v="saints">Saints</button><button data-v="scripture">Scripture</button><button data-v="psalter">Psalter</button></div></div>
+    <div class="row"><label>Prayers</label><div class="switch" data-key="prayers"></div></div>
+    <div class="row"><label>The Hour of the day</label><div class="switch" data-key="hours"></div></div>
+    <div class="row"><label>Morning prayers each new day</label><div class="switch" data-key="morning"></div></div>
+  </div>
+
+  <h2>Voice</h2>
+  <div class="group">
+    <div class="row"><span class="step wide" data-key="voice" data-list="voices"><button>‹</button><output></output><button>›</button></span><button class="hear" data-do="hear">Hear</button></div>
+    <div class="row"><span class="label">Speed</span><span class="step" data-key="rate" data-min="-40" data-max="30" data-by="5" data-fmt="rate"><button>−</button><output></output><button>+</button></span></div>
+    <div class="row"><span class="label">Volume</span><span class="step" data-key="voice_volume" data-min="10" data-max="100" data-by="10" data-fmt="pct"><button>−</button><output></output><button>+</button></span></div>
+    <div class="row"><label>Birdsong</label><span class="step" data-key="ambience_volume" data-min="0" data-max="100" data-by="10" data-fmt="pct"><button>−</button><output></output><button>+</button></span><div class="switch" data-key="ambience"></div></div>
+  </div>
+
+  <h2>Time</h2>
+  <div class="group">
+    <div class="row"><span class="label">Break every</span><span class="step" data-key="work_minutes" data-min="15" data-max="480" data-by="15" data-fmt="min"><button>−</button><output></output><button>+</button></span></div>
+    <div class="row"><span class="label">Break length</span><span class="step" data-key="break_minutes" data-min="1" data-max="60" data-by="1" data-fmt="min"><button>−</button><output></output><button>+</button></span></div>
+    <div class="row"><span class="label">New day after<span class="sub">hours away from the computer</span></span><span class="step" data-key="sleep_hours" data-min="2" data-max="14" data-by="1" data-fmt="h"><button>−</button><output></output><button>+</button></span></div>
+    <div class="row"><label>Start with Windows</label><div class="switch" data-key="autostart"></div></div>
+  </div>
+
+  <h2>Appearance</h2>
+  <div class="group">
+    <div class="row stack"><div class="seg" data-key="theme"><button data-v="system">System</button><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
+  </div>
+
+  <footer>Through the prayers of our holy fathers, Lord Jesus Christ our God, have mercy on us.</footer>
+</main>
+
+<script>
+const TOKEN = new URLSearchParams(location.search).get("t");
+const $ = (q, el = document) => el.querySelector(q), $$ = (q, el = document) => [...el.querySelectorAll(q)];
+let cfg = {}, voices = [], pending = {};
+
+const FMT = {
+  pct: v => `${v}%`, min: v => `${v} min`, h: v => `${v} h`,
+  rate: v => v === 0 ? "Normal" : (v > 0 ? `+${v}%` : `${v}%`),
+};
+
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? "POST" : "GET", headers: { "X-Token": TOKEN, "Content-Type": "application/json" },
+                                body: body ? JSON.stringify(body) : undefined });
+  return r.ok ? r.json() : null;
+}
+function set(key, value) {
+  cfg[key] = value; pending[key] = Date.now(); paint();
+  api("/api/set", { key, value });
+}
+
+// ---------------------------------------------------------------- theme
+const dark = matchMedia("(prefers-color-scheme: dark)");
+function applyTheme() {
+  const t = cfg.theme || "system";
+  document.documentElement.dataset.theme = t === "system" ? (dark.matches ? "dark" : "light") : t;
+}
+dark.addEventListener("change", applyTheme);
+
+// ---------------------------------------------------------------- controls
+function placeThumb(seg) {
+  const on = $("button.on", seg), thumb = $(".thumb", seg);
+  if (!on || !thumb) return;
+  thumb.style.width = on.offsetWidth + "px";
+  thumb.style.transform = `translateX(${on.offsetLeft}px)`;
+}
+$$(".seg").forEach(seg => {
+  seg.insertAdjacentHTML("afterbegin", '<span class="thumb"></span>');
+  $$("button", seg).forEach(b => b.onclick = () => set(seg.dataset.key, b.dataset.v));
+});
+$$(".switch[data-key]").forEach(sw => {
+  sw.setAttribute("role", "switch"); sw.tabIndex = 0;
+  const flip = () => set(sw.dataset.key, !cfg[sw.dataset.key]);
+  sw.onclick = flip;
+  sw.onkeydown = e => (e.key === " " || e.key === "Enter") && (e.preventDefault(), flip());
+  const label = $("label", sw.closest(".row"));
+  if (label) label.onclick = flip;
+});
+$$(".step").forEach(st => {
+  const [less, more] = $$("button", st);
+  const move = dir => {
+    const key = st.dataset.key;
+    if (st.dataset.list === "voices") {
+      const i = voices.findIndex(v => v[0] === cfg[key]);
+      set(key, voices[(i + dir + voices.length) % voices.length][0]);
+    } else {
+      const v = Math.min(+st.dataset.max, Math.max(+st.dataset.min, (+cfg[key] || 0) + dir * +st.dataset.by));
+      set(key, v);
+    }
+  };
+  less.onclick = () => move(-1); more.onclick = () => move(1);
+});
+$("#enabled").onclick = () => api("/api/do", { action: "toggle" }).then(refresh);
+$$("[data-do]").forEach(b => b.onclick = () => api("/api/do", { action: b.dataset.do }).then(() => setTimeout(refresh, 300)));
+
+function paint() {
+  applyTheme();
+  $$(".seg").forEach(seg => {
+    $$("button", seg).forEach(b => b.classList.toggle("on", cfg[seg.dataset.key] === b.dataset.v));
+    placeThumb(seg);
+  });
+  $$(".switch[data-key]").forEach(sw => { sw.classList.toggle("on", !!cfg[sw.dataset.key]); sw.setAttribute("aria-checked", !!cfg[sw.dataset.key]); });
+  $$(".step").forEach(st => {
+    const v = cfg[st.dataset.key];
+    $("output", st).textContent = st.dataset.list === "voices" ? ((voices.find(x => x[0] === v) || [, v])[1]) : FMT[st.dataset.fmt](v);
+  });
+}
+
+// ---------------------------------------------------------------- state
+let iconDay = null;
+async function refresh() {
+  const s = await api("/api/state");
+  if (!s) return;
+  voices = s.voices;
+  for (const [k, v] of Object.entries(s.cfg)) if (!pending[k] || Date.now() - pending[k] > 1500) cfg[k] = v;
+  paint();
+  const st = s.status;
+  $("#date").textContent = st.date;
+  $("#feast").textContent = st.feast;
+  $("#next").textContent = st.headline;
+  $("#sub").textContent = st.sub;
+  $("#bar").style.width = (st.progress * 100).toFixed(1) + "%";
+  $(".bar").style.opacity = st.enabled && !st.reading ? 1 : 0;
+  $("#enabled").classList.toggle("on", st.enabled);
+  document.body.classList.toggle("reading", st.reading);
+  if (st.today && st.today.fast) fastBadge($("#fast"), st.today);
+  if (todayIso !== st.day) {  // first load, or the day turned
+    todayIso = st.day;
+    const [y, m] = st.day.split("-").map(Number);
+    loadMonth(y, m, st.day);
+  }
+  if (iconDay !== st.day) {
+    iconDay = st.day;
+    const img = $("#icon");
+    img.classList.remove("loaded");
+    img.onload = () => img.classList.add("loaded");
+    img.src = `/icon?t=${TOKEN}&d=${st.day}`;
+  }
+}
+// ---------------------------------------------------------------- calendar
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let view = null, month = null, selected = null, todayIso = null;
+
+function fastBadge(el, item) {
+  el.className = "fast shown " + (item.fast || "none");
+  $(".dot", el).className = "dot " + (item.fast || "none");
+  el.lastElementChild.textContent = item.fast_text || "";
+}
+function showDetail(item, animate = true) {
+  const box = $("#detail");
+  const fill = () => {
+    if (!item) { box.innerHTML = ""; return; }
+    const saints = (item.saints || []).slice(0, 8).map(s => `<li>${esc(s)}</li>`).join("");
+    const refs = (item.readings || []).map(esc).join(" · ");
+    box.innerHTML = `<div class="when">${esc(item.iso_label || "")} · ${esc(item.old)}, old style${item.tone ? " · Tone " + item.tone : ""}</div>
+      <div class="title">${esc(item.title)}</div>
+      <div class="fast shown ${item.fast}"><span class="dot ${item.fast}"></span><span>${esc(item.fast_text)}</span></div>
+      ${(item.feasts || []).length ? `<div class="refs"><b>Feast</b> ${item.feasts.map(esc).join("; ")}</div>` : ""}
+      ${saints ? `<ul>${saints}</ul>` : ""}
+      ${refs ? `<div class="refs"><b>Readings</b> ${refs}</div>` : ""}`;
+    box.classList.remove("fading");
+  };
+  if (animate) { box.classList.add("fading"); setTimeout(fill, 160); } else fill();
+}
+async function loadMonth(y, m, pick) {
+  const grid = $("#grid");
+  grid.classList.add("fading");
+  const data = await api(`/api/month?y=${y}&m=${m}`);
+  if (!data) return;
+  month = data; view = { y, m };
+  $("#mname").textContent = data.name;
+  const heads = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => `<div class="wd">${d}</div>`).join("");
+  const blanks = "<div></div>".repeat(data.first);
+  grid.innerHTML = heads + blanks + data.days.map(d => {
+    const mk = d.feast === "great" ? "✚" : "";
+    const cls = ["cell", d.feast, d.iso === todayIso ? "today" : "", d.iso === selected ? "sel" : ""].join(" ");
+    return `<div class="${cls}" data-iso="${d.iso}" title="${esc(d.title)}"><b>${d.day}</b>${mk ? `<span class="mk">${mk}</span>` : ""}${d.fast !== "none" ? `<i class="dot ${d.fast}"></i>` : ""}</div>`;
+  }).join("");
+  $$(".cell", grid).forEach(c => c.onclick = () => select(c.dataset.iso));
+  requestAnimationFrame(() => grid.classList.remove("fading"));
+  if (pick) select(pick, false);
+}
+function select(iso, animate = true) {
+  selected = iso;
+  $$(".cell").forEach(c => c.classList.toggle("sel", c.dataset.iso === iso));
+  const item = month && month.days.find(d => d.iso === iso);
+  if (item) {
+    const d = new Date(iso + "T12:00");
+    item.iso_label = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  }
+  showDetail(item, animate);
+}
+const shift = n => { let { y, m } = view; m += n; if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; } loadMonth(y, m); };
+$("#prev").onclick = () => shift(-1);
+$("#nextm").onclick = () => shift(1);
+
+const firstLoad = refresh().then(() => requestAnimationFrame(() => $("#main").classList.add("ready")));
+setInterval(refresh, 1000);
+addEventListener("resize", () => $$(".seg").forEach(placeThumb));
+document.fonts.ready.then(() => $$(".seg").forEach(placeThumb));
+</script>
+</body>
+</html>
