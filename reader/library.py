@@ -141,6 +141,35 @@ def lxx(psalm: int) -> int:
     return psalm - 1 if 11 <= psalm <= 146 and psalm not in (115, 116) else psalm
 
 
+GOSPELS = {"Matthew", "Mark", "Luke", "John"}
+NUMBERED = {"1": "First", "2": "Second", "3": "Third"}
+
+
+def book_phrase(book: str) -> str:
+    """How a reading is announced: "the Holy Gospel according to Saint Luke"."""
+    if book in GOSPELS:
+        return f"the Holy Gospel according to Saint {book}"
+    if book == "Acts":
+        return "the Acts of the Apostles"
+    if book == "Revelation":
+        return "the Revelation of Saint John"
+    if book == "Psalms":
+        return "the Psalms"
+    epistles = {"Romans", "Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians", "Thessalonians",
+                "Timothy", "Titus", "Hebrews", "James", "Peter", "John", "Jude"}
+    num, _, name = book.partition(" ") if book[0].isdigit() else ("", "", book)
+    if name in epistles:
+        to = {"James": "of James", "Peter": "of Peter", "John": "of John", "Jude": "of Jude"}.get(name, f"to the {name}")
+        return f"the {NUMBERED[num] + ' ' if num else ''}Epistle {to}"
+    if book in ("Isaiah", "Jeremiah", "Ezekiel", "Daniel", "Micah", "Jonah", "Hosea", "Joel", "Amos"):
+        return f"the Prophecy of {book}"
+    if book in ("Wisdom of Solomon", "Lamentations"):
+        return f"the {book}"
+    if num:
+        return f"the {NUMBERED[num]} Book of {name}"
+    return f"the Book of {book}"
+
+
 CHARS_PER_SECOND = 13.0  # the neural voice at a calm pace
 GAP = 2.5                # silence between works
 
@@ -168,6 +197,7 @@ class Library:
         self.hours = _mine("hours.json").get("hours", {})
         self.works = _mine("works.json")  # whole works from your own books: Prologue, Theophan, Chrysostom
         self.lxx = {b["name"]: b["chapters"] for b in _load("lxx.json")["books"]}  # Brenton: Wisdom, Sirach...
+        self.pericopes = _load("pericopes.json")  # the great passages, each read whole
         self._kjv: dict | None = None
         self.rng = random.Random()
         self._lock = threading.Lock()
@@ -392,21 +422,45 @@ class Library:
             return Segment("homily", w["title"], [w["title"] + "."] + w["text"])
         if kind == "life":
             return self.random_life()
+        if kind in ("gospel", "apostle", "prophets"):
+            return self.pericope(pick(self.pericopes[kind]))
+        if kind == "lectionary":
+            return self.lectionary()
         if kind == "wisdom":
             book = pick(["Wisdom of Solomon"] * 5 + ["Sirach"] * 4 + ["Tobit", "Baruch"])
             return self.lxx_chapter(book, self.rng.randint(1, len(self.lxx[book])))
         if kind == "psalm":
-            return self.psalm() if self.rng.random() < .5 else (
-                self.psalter_psalm(pick(list(self.psalter))) if self.psalter else self.chapter("Psalms", self.rng.randint(1, 150)))
-        if kind == "gospel":
-            book = pick(["Matthew", "Mark", "Luke", "John"])
-            return self.chapter(book, self.rng.randint(1, len(self.kjv[book])))
-        if kind == "epistle":
-            book = pick(SCRIPTURE_PARTS[2][1])
-            return self.chapter(book, self.rng.randint(1, len(self.kjv[book])))
-        if kind == "proverbs":
-            book = pick(["Proverbs", "Ecclesiastes", "Isaiah"])
-            return self.chapter(book, self.rng.randint(1, len(self.kjv[book])))
+            kjv = pick(self.pericopes["psalms"])
+            return self.psalter_psalm(str(lxx(kjv))) if self.psalter and str(lxx(kjv)) in self.psalter else self.chapter("Psalms", kjv)
+        return None
+
+    def pericope(self, item: list) -> Segment:
+        """One of the great passages, read whole: [title, book, chapter, first, last]."""
+        title, book, chapter, first, last = item
+        verses = (self.lxx.get(book) or self.kjv[book])[chapter - 1]
+        verses = verses[first - 1: last or None]
+        ref = f"{book} {chapter}:{first}" + (f"-{last}" if last else "")
+        return Segment("scripture", f"{title} ({ref})", [f"From {book_phrase(book)}. {title}."] + verses)
+
+    def lectionary(self) -> Segment | None:
+        """A Gospel or Epistle the Church appoints for some day of the year (from the
+        old-calendar days on disk), with the day it belongs to."""
+        files = list(DAYS.glob("*.json"))
+        self.rng.shuffle(files)
+        for path in files[:30]:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except ValueError:
+                continue
+            readings = [r for r in data.get("readings") or [] if r.get("source") in ("Gospel", "Epistle") and r.get("passage")]
+            if not readings:
+                continue
+            r = self.rng.choice(readings)
+            day = (data.get("titles") or [data.get("summary_title") or ""])[0]
+            kind = "Gospel" if r["source"] == "Gospel" else "Epistle"
+            verses = [strip_html(v.get("content", "")) for v in r["passage"]]
+            head = f"The {kind} for {day}: {r.get('display', '')}." if day else f"The {kind}: {r.get('display', '')}."
+            return Segment("scripture", f"The {kind} · {r.get('display', '')}", cut([head] + verses, SEGMENT_CHARS * 2))
         return None
 
     def lxx_chapter(self, book: str, number: int) -> Segment:
@@ -414,9 +468,9 @@ class Library:
         return Segment("scripture", title, cut([f"From the {book}, chapter {number}."] + self.lxx[book][number - 1], SEGMENT_CHARS * 2))
 
     KINDS = {
-        # content setting -> (kind, weight): the variety a break draws from
+        # content setting -> (kind, weight): the variety a break draws from, at random
         "saints": [("prologue", 5), ("homily", 2), ("theophan", 2), ("chrysostom", 1), ("life", 2)],
-        "scripture": [("wisdom", 4), ("psalm", 3), ("gospel", 3), ("epistle", 2), ("proverbs", 1)],
+        "scripture": [("lectionary", 4), ("gospel", 4), ("apostle", 3), ("prophets", 3), ("psalm", 3), ("wisdom", 1)],
     }
 
     def works_for(self, cfg: dict, seconds: float) -> list[Segment]:
@@ -430,15 +484,17 @@ class Library:
         last = None
         left = seconds
         misses = 0
+        seen: set[str] = set()
         while left > 45 and misses < 30:
             kind = self.rng.choice(bag)
             if kind == last and len(set(bag)) > 1:
                 continue
             item = self.work(kind)
-            if item is None or not item.lines or speaking_time(item) > left:
+            if item is None or not item.lines or item.title in seen or speaking_time(item) > left:
                 misses += 1
                 continue
             out.append(item)
+            seen.add(item.title)
             left -= speaking_time(item) + GAP
             last = kind
             misses = 0
