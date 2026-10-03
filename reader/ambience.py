@@ -1,136 +1,178 @@
-"""A quiet garden: songbirds over a soft brook, synthesised (no recordings, so no
-licence questions). Rendered once to %APPDATA% as a seamless 75-second loop.
+"""A quiet garden outside the window: songbirds in the trees and a brook beyond them,
+synthesised (no recordings, so no licence questions) and placed in real space.
+Rendered once to %APPDATA% as a seamless 75-second loop.
 
-Four birds sit at fixed places in the stereo field, each with its own song:
+Four birds, each with its own song, at its own place around you:
   whistle  two clear falling notes ("fee-bee")
   phrase   a short varied run of sweeping notes, like a robin
   trill    a fast run of tiny notes
   warble   a quick vibrato tumble, like a wren
+
+How the space is made (the cues the ear really uses):
+  direction  the far ear hears a bird up to 0.6 ms later (interaural time) and a
+             little quieter and duller (the head's shadow)
+  distance   farther birds are quieter, lose their highs to the air, and carry
+             more of the garden's echo than the direct sound
+  the garden a short, sparse outdoor echo (trees, a wall), wide and decorrelated
+  the brook  far off and low, a slow-breathing rush
+The mix is set to a fixed loudness, well under the voice.
 """
 
 from __future__ import annotations
 
-import array
 import math
 import random
 import wave
+
+import numpy as np
 
 from . import settings
 
 RATE = 22050
 SECONDS = 75
 FADE = 3.0
-PATH = settings.HOME / "ambience-v2.wav"
+PATH = settings.HOME / "ambience-v3.wav"
 TAU = 2 * math.pi
+TARGET_RMS = 10 ** (-31 / 20)  # the garden's loudness, before the volume setting
+HEAD = 0.00066                  # seconds: the largest interaural time difference
 
 
-def _note(left, right, rate, at, dur, f0, f1, amp, pan, vibrato=(0.0, 0.0), harmonic=0.12):
-    """One sweeping note with a smooth envelope, added into the two channels."""
-    n = int(dur * rate)
-    start = int(at * rate)
-    if start + n >= len(left):
+def _note(track: np.ndarray, at: float, dur: float, f0: float, f1: float, amp: float,
+          vibrato=(0.0, 0.0), harmonic: float = 0.12) -> None:
+    """One sweeping note with a smooth envelope, added into a mono track."""
+    n = int(dur * RATE)
+    start = int(at * RATE)
+    if n <= 0 or start + n >= len(track):
         return
-    gl, gr = amp * math.cos(pan * math.pi / 2), amp * math.sin(pan * math.pi / 2)
-    vib_rate, vib_depth = vibrato
-    phase = 0.0
-    for i in range(n):
-        t = i / n
-        f = f0 + (f1 - f0) * t + (vib_depth * math.sin(TAU * vib_rate * i / rate) if vib_depth else 0.0)
-        phase += TAU * f / rate
-        env = math.sin(math.pi * t) ** 2
-        s = env * (math.sin(phase) + harmonic * math.sin(2 * phase))
-        left[start + i] += s * gl
-        right[start + i] += s * gr
+    t = np.arange(n) / n
+    f = f0 + (f1 - f0) * t
+    if vibrato[1]:
+        f = f + vibrato[1] * np.sin(TAU * vibrato[0] * np.arange(n) / RATE)
+    phase = np.cumsum(TAU * f / RATE)
+    env = np.sin(np.pi * t) ** 2
+    track[start:start + n] += amp * env * (np.sin(phase) + harmonic * np.sin(2 * phase))
 
 
-def _whistle(L, R, rng, at, amp, pan):
+def _whistle(tr, rng, at, amp):
     hi = rng.uniform(3600, 4100)
-    _note(L, R, RATE, at, rng.uniform(0.3, 0.4), hi, hi * 0.98, amp, pan, harmonic=0.03)
+    _note(tr, at, rng.uniform(0.3, 0.4), hi, hi * 0.98, amp, harmonic=0.03)
     lo = hi * rng.uniform(0.8, 0.86)
-    _note(L, R, RATE, at + 0.45, rng.uniform(0.32, 0.42), lo, lo * 0.98, amp, pan, harmonic=0.03)
+    _note(tr, at + 0.45, rng.uniform(0.32, 0.42), lo, lo * 0.98, amp, harmonic=0.03)
 
 
-def _phrase(L, R, rng, at, amp, pan):
+def _phrase(tr, rng, at, amp):
     t = at
     for _ in range(rng.randint(3, 7)):
         f0 = rng.uniform(2100, 3300)
-        f1 = f0 + rng.uniform(-700, 700)
         d = rng.uniform(0.07, 0.17)
-        _note(L, R, RATE, t, d, f0, f1, amp * rng.uniform(0.7, 1.0), pan)
+        _note(tr, t, d, f0, f0 + rng.uniform(-700, 700), amp * rng.uniform(0.7, 1.0))
         t += d + rng.uniform(0.04, 0.12)
 
 
-def _trill(L, R, rng, at, amp, pan):
+def _trill(tr, rng, at, amp):
     base = rng.uniform(3900, 4600)
     t = at
     for k in range(rng.randint(10, 22)):
         f = base + (220 if k % 2 else -220)
-        _note(L, R, RATE, t, 0.028, f, f - 300, amp * (0.6 + 0.4 * math.sin(math.pi * k / 22)), pan)
+        _note(tr, t, 0.028, f, f - 300, amp * (0.6 + 0.4 * math.sin(math.pi * k / 22)))
         t += 0.043
 
 
-def _warble(L, R, rng, at, amp, pan):
+def _warble(tr, rng, at, amp):
     f0 = rng.uniform(2600, 3200)
-    _note(L, R, RATE, at, rng.uniform(0.5, 0.8), f0, f0 + rng.uniform(300, 800), amp, pan,
+    _note(tr, at, rng.uniform(0.5, 0.8), f0, f0 + rng.uniform(300, 800), amp,
           vibrato=(rng.uniform(24, 36), rng.uniform(300, 520)))
 
 
 SONGS = [_whistle, _phrase, _trill, _warble]
 
 
-def render(seed: int = 7) -> tuple[array.array, array.array]:
+def _lowpass(x: np.ndarray, cutoff: float) -> np.ndarray:
+    spec = np.fft.rfft(x)
+    f = np.fft.rfftfreq(len(x), 1 / RATE)
+    return np.fft.irfft(spec / np.sqrt(1 + (f / cutoff) ** 4), len(x))
+
+
+def _shift(x: np.ndarray, samples: float) -> np.ndarray:
+    """Delay by a fraction of a sample (interaural time is smaller than one sample)."""
+    f = np.fft.rfftfreq(len(x))
+    return np.fft.irfft(np.fft.rfft(x) * np.exp(-2j * np.pi * f * samples), len(x))
+
+
+def _place(mono: np.ndarray, azimuth: float, distance: float) -> np.ndarray:
+    """A sound at an angle (degrees, 0 = ahead, + = right) and a distance (metres)."""
+    a = math.radians(azimuth)
+    itd = HEAD * math.sin(a) * RATE              # samples the far ear lags
+    near_gain, far_gain = 1.0, 10 ** (-abs(math.sin(a)) * 5 / 20)  # up to -5 dB shadow
+    dry = _lowpass(mono, max(2500.0, 14000.0 / (1 + distance / 12))) / max(1.0, distance / 4)
+    shadowed = _lowpass(dry, 3200.0 + 6000.0 * (1 - abs(math.sin(a))))
+    near, far = dry * near_gain, _shift(shadowed, abs(itd)) * far_gain
+    left, right = (far, near) if a > 0 else (near, far)
+    return np.stack([left, right], axis=1)
+
+
+def _garden(length: int, rng: np.random.Generator) -> np.ndarray:
+    """The outdoor echo: sparse reflections off trees and a wall, then a short wide tail."""
+    ir = np.zeros((int(0.9 * RATE), 2))
+    for ch in range(2):
+        for _ in range(26):
+            k = int(rng.uniform(0.012, 0.35) * RATE)
+            ir[k, ch] += rng.uniform(-1, 1) * math.exp(-k / RATE / 0.18)
+        t = np.arange(len(ir)) / RATE
+        ir[:, ch] += rng.standard_normal(len(ir)) * np.exp(-t / 0.22) * 0.06 * (t > 0.03)
+    ir /= np.sqrt((ir ** 2).sum(axis=0, keepdims=True))
+    return ir
+
+
+def render(seed: int = 7) -> np.ndarray:
     rng = random.Random(seed)
+    nrng = np.random.default_rng(seed)
     total = int((SECONDS + FADE) * RATE)
-    L = array.array("d", bytes(8 * total))
-    R = array.array("d", bytes(8 * total))
-    # The brook: two low-passed noises (left/right), slowly swelling.
-    # Three one-pole stages roll off the hiss, leaving a soft low rush of water.
-    a = b = c = d = e = f = 0.0
-    swell = 0.5
-    for i in range(total):
-        if i % 2205 == 0:
-            swell = min(1.0, max(0.35, swell + rng.uniform(-0.06, 0.06)))
-        a += 0.08 * (rng.uniform(-1, 1) - a)
-        b += 0.08 * (rng.uniform(-1, 1) - b)
-        c += 0.08 * (a - c)
-        d += 0.08 * (b - d)
-        e += 0.15 * (c - e)
-        f += 0.15 * (d - f)
-        L[i] += 2.2 * e * swell
-        R[i] += 2.2 * f * swell
-    # The birds, each at its own distance and side, singing every few seconds.
-    birds = [(song, rng.uniform(0.1, 0.9), rng.uniform(0.06, 0.13)) for song in SONGS]
-    for song, pan, amp in birds:
+    birds = np.zeros((total, 2))
+    # Each bird: a song, a place (angle, metres), a loudness at its place.
+    places = [(-55, 9), (35, 14), (-20, 22), (70, 7)]
+    rng.shuffle(places)
+    for song, (azimuth, distance) in zip(SONGS, places):
+        track = np.zeros(total)
         t = rng.uniform(0.5, 6.0)
         while t < SECONDS + FADE - 2:
-            song(L, R, rng, t, amp * rng.uniform(0.75, 1.0), pan)
-            t += rng.uniform(3.5, 11.0)
+            song(track, rng, t, rng.uniform(0.75, 1.0))
+            t += rng.uniform(4.0, 12.0)
+        birds += _place(track, azimuth + rng.uniform(-8, 8), distance)
+    # The garden's echo: more of it for the far birds, as outdoors.
+    ir = _garden(total, nrng)
+    size = 1 << (total + len(ir)).bit_length()
+    wet = np.stack([np.fft.irfft(np.fft.rfft(birds.mean(axis=1), size) * np.fft.rfft(ir[:, ch], size), size)[:total]
+                    for ch in range(2)], axis=1)
+    mix = birds * 0.8 + wet * 0.45
+    # The brook: far off and low, slowly breathing, a little wider than the birds.
+    noise = nrng.standard_normal((total, 2))
+    brook = np.stack([_lowpass(_lowpass(noise[:, ch], 700.0), 900.0) for ch in range(2)], axis=1)
+    breath = np.interp(np.arange(total), np.linspace(0, total, 60), 0.6 + 0.4 * nrng.random(60))
+    brook *= breath[:, None]
+    brook *= np.sqrt(np.mean(mix ** 2)) / np.sqrt(np.mean(brook ** 2)) * 0.55
+    mix += brook
     # Seamless loop: fade the tail into the head.
-    n = int(FADE * RATE)
-    keep = int(SECONDS * RATE)
-    for i in range(n):
-        w = i / n
-        L[i] = L[i] * w + L[keep + i] * (1 - w)
-        R[i] = R[i] * w + R[keep + i] * (1 - w)
-    return L[:keep], R[:keep]
+    n, keep = int(FADE * RATE), int(SECONDS * RATE)
+    w = np.linspace(0, 1, n)[:, None]
+    mix[:n] = mix[:n] * w + mix[keep:keep + n] * (1 - w)
+    mix = mix[:keep]
+    mix *= TARGET_RMS / (np.sqrt(np.mean(mix ** 2)) or 1.0)
+    return np.tanh(mix / 0.5) * 0.5  # soft ceiling: no chirp ever stabs
 
 
 def ensure() -> str:
     """The ambience file, rendering it the first time (a few seconds)."""
     if PATH.is_file():
         return str(PATH)
-    L, R = render()
-    peak = max(max(abs(x) for x in L), max(abs(x) for x in R)) or 1.0
-    scale = 0.8 * 32767 / peak
-    pcm = array.array("h", bytes(4 * len(L)))
-    for i in range(len(L)):
-        pcm[2 * i] = int(L[i] * scale)
-        pcm[2 * i + 1] = int(R[i] * scale)
+    mix = render()
     tmp = PATH.with_suffix(".tmp")
     with wave.open(str(tmp), "wb") as out:
         out.setnchannels(2)
         out.setsampwidth(2)
         out.setframerate(RATE)
-        out.writeframes(pcm.tobytes())
+        out.writeframes((mix * 32767).astype(np.int16).tobytes())
     tmp.replace(PATH)
+    for old in settings.HOME.glob("ambience-v[12].wav"):
+        old.unlink(missing_ok=True)
     return str(PATH)

@@ -71,11 +71,19 @@ def _impulse(rate: int) -> np.ndarray:
         start = int(PREDELAY * rate) + ch * int(0.0037 * rate)  # left and right differ: width
         tail[:start] = 0
         ir[:, ch] = tail
-        # early reflections: near walls, a little different on each side
-        for ms, g in ((11, .55), (17, .42), (23, .35), (31, .28), (43, .2), (59, .14)):
-            k = int((ms + ch * 2.3) * rate / 1000)
+    # Early reflections, each from a real direction (degrees, + = right): the far ear
+    # hears it later and quieter. This is what moves a voice out of your head and in front.
+    for ms, g, azimuth in ((11, .55, -62), (14, .5, 58), (19, .4, -110), (23, .36, 120),
+                           (31, .3, -35), (37, .26, 40), (47, .2, 180), (59, .15, -150)):
+        a = np.radians(azimuth)
+        itd = 0.00066 * abs(np.sin(a))
+        shadow = 10 ** (-abs(np.sin(a)) * 6 / 20)
+        sign = 1 if ms % 2 else -1
+        for ch, (delay, gain) in enumerate(((itd if azimuth > 0 else 0, shadow if azimuth > 0 else 1),
+                                            (itd if azimuth < 0 else 0, shadow if azimuth < 0 else 1))):
+            k = int((ms / 1000 + delay) * rate)
             if k < length:
-                ir[k, ch] += g * (1 if (ms + ch) % 2 else -1)
+                ir[k, ch] += sign * g * gain
     ir /= np.sqrt((ir ** 2).sum(axis=0, keepdims=True))  # each side carries unit energy
     return ir
 
