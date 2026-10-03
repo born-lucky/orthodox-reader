@@ -32,8 +32,9 @@ DEFAULTS = {
     "morning": True,           # a session with the day's readings when a new day begins
     "morning_minutes": 30,     # the morning prayers and the day's readings take longer than a break
     "ambience": True,
-    "ambience_volume": 30,     # 0-100
-    "voice_volume": 100,       # 0-100
+    "ambience_volume": 20,     # 0-100
+    "voice_volume": 70,        # 0-100
+    "room": True,              # place the voice in a room (reverb, distance) instead of in your ears
     "voice": "en-GB-RyanNeural",  # an edge voice, or "sapi" for the offline Windows voice
     "rate": -10,               # speech speed, percent
     "warn_seconds": 60,

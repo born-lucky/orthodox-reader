@@ -93,9 +93,10 @@ def test_weekday_parts():
 
 def test_plan_always_has_content_and_a_closing():
     lib = library.Library()
-    cfg = {"prayers": True, "content": "scripture", "hours": False}
-    segments, closing = lib.plan("break", cfg)
-    assert len(segments) > 10 and closing is not None
+    cfg = {"prayers": True, "content": "mixed", "hours": False}
+    segments, closing = lib.plan("break", cfg, 15)
+    assert sum(library.speaking_time(s) for s in segments) <= 15 * 60  # whole works that fit
+    assert len(segments) >= 3 and closing is not None
     assert all(seg.lines for seg in segments)
 
 

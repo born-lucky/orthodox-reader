@@ -5,7 +5,8 @@ A quiet Orthodox companion for Windows. Every two hours of work it takes a fifte
 - **Two kinds of break.** *Lock screen*: a full-screen icon, the words being read, or darkness, with the mouse and keyboard held for the break. *Audio only*: the reading plays while you keep working, with an optional small window to read along.
 - **The day by the old calendar.** The day's feast, fast (strict, or fish/wine/oil allowed) and saints, a month calendar of fasts and feasts, and the appointed Scripture readings, from [orthocal.info](https://orthocal.info).
 - **The Hours.** With a Horologion, each break can begin with the Hour of the day: the First, Third, Sixth, Ninth Hour, or Compline.
-- **A free voice.** Microsoft's neural voices through `edge-tts` when online, and the Windows voice offline. No account, no key, no cost.
+- **Whole works, never cut off.** Each break is filled with complete pieces of different kinds that fit the time: a chapter of the Wisdom of Solomon or Sirach (Brenton's Septuagint), a psalm, a Gospel or Epistle chapter, a life of a saint, and, from your own books, a life from the Prologue of Ohrid, a thought of St. Theophan, or a homily of St. John Chrysostom.
+- **A free voice, in a room.** Microsoft's neural voices through `edge-tts` when online, and the Windows voice offline. No account, no key, no cost. The voice is placed a few metres away in a quiet stone church (distance, early reflections, a soft stereo tail) and kept at a calm level, so it never sits inside your ears.
 - **Birdsong and a brook**, synthesised (no recordings), as a seamless loop.
 - **Honest about your time.** It measures real use (mouse and keyboard). Fifteen minutes away already counts as a break, and five hours away is a night: a new day.
 
@@ -37,6 +38,7 @@ Bundled, all public domain:
 
 - Traditional prayers in the older English of Hapgood's *Service Book* (1906) and the King James Version
 - The King James Bible (1769)
+- Wisdom of Solomon, Sirach, Tobit, Baruch and Judith from Brenton's English Septuagint (1851)
 
 Fetched from orthocal.info and kept on your computer (for offline lives of the saints):
 
@@ -49,6 +51,7 @@ If you own other translations (a prayer book, a Horologion, a Psalter), `tools/b
 
 ```powershell
 python tools/build_my_texts.py --jordanville "Prayer Book.pdf" --horologion "Horologion.pdf" --psalter liturgy.io
+python tools/build_my_texts.py --bot path\to\orthodox-reading-bot   # Prologue, Theophan, Chrysostom
 ```
 
 The page ranges match the Holy Trinity Monastery *Prayer Book* (4th ed.) and *Unabbreviated Horologion* (2nd ed.). Scanned PDFs are cleaned of OCR errors, and the Hours keep only the parts for the day of the week.
@@ -56,6 +59,16 @@ The page ranges match the Holy Trinity Monastery *Prayer Book* (4th ed.) and *Un
 ## Design
 
 The window is laid out like a page of a service book: ink on warm paper with a matte grain, **cinnabar red for rubrics** (what you *do*), black for what you *read*, and gold only as a hairline. Dark mode is the same book by lamplight, and it follows Windows unless you choose one. Type: **Ponomar** (the Slavonic Computing Initiative's church face) for the title, and **Literata**, made for long reading on screens, for everything else. Both are SIL Open Font License.
+
+Principles, after the way Steve Jobs thought about design:
+
+1. **Focus is saying no.** The main view shows only what you need every day: today, the next break, three actions, the calendar. Everything else is one quiet link away in Settings.
+2. **Simplicity is the ultimate sophistication.** The defaults work, and every word has to earn its place.
+3. **Design is how it works.** The status says exactly what will happen next, in words; a break is made of whole works, never cut off.
+4. **One accent.** Red means "act" and nothing else. No shadows, outlines or gradients; surfaces are told apart by tone and space.
+5. **Typography matters.** One reading face (Literata) and one ceremonial face (Ponomar), and the text can be selected like any page.
+6. **Motion explains.** Animations are short, ease out, show where things went, and switch off when Windows asks for reduced motion.
+7. **The back of the fence.** The voice's room, tabular numbers, aligned controls, keyboard access: details nobody points at but everyone feels.
 
 The window is a local page in a chromeless Edge window, served on `127.0.0.1` only, and every request needs a random token.
 

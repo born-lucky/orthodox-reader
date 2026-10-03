@@ -14,11 +14,11 @@ import threading
 import time
 
 from . import ambience, audio, speech
-from .library import Library, Segment
+from .library import Library, Segment, speaking_time
 
 CLOSING_RESERVE = 75   # seconds kept for the closing prayer
 OVERRUN = 90           # the closing prayer may run this far past the end
-GAP_CHUNK = 0.35
+GAP_CHUNK = 0.05  # the room's own tail is the pause between sentences
 GAP_SEGMENT = 1.6
 
 
@@ -59,7 +59,7 @@ class Session(threading.Thread):
                 except OSError:
                     amb = None
             self.post("title", "Preparing the readings…")
-            segments, closing = self.library.plan(self.kind, self.cfg)
+            segments, closing = self.library.plan(self.kind, self.cfg, self.seconds / 60)
             voice = speech.Voice(self.cfg)
             closing_files = [(c, voice.make(c)) for line in (closing.lines if closing else []) for c in speech.chunks(line)]
             self._read(segments, voice)
@@ -106,14 +106,17 @@ class Session(threading.Thread):
                             break
                         except queue.Full:
                             pass
-                if not pending:
-                    pending += self.library.random_segments(self.cfg, 6)
+                if not pending:  # time to spare: one more whole work that fits, if any
+                    spare = self.end - time.monotonic() - CLOSING_RESERVE - 60
+                    extra = self.library.filler(self.cfg, spare) if spare > 60 else None
+                    if extra is not None:
+                        pending.append(extra)
             ready.put(None)
 
         threading.Thread(target=produce, name="reader-voice", daemon=True).start()
         current = None
         try:
-            while not self.stopped and time.monotonic() < self.end - CLOSING_RESERVE:
+            while not self.stopped and time.monotonic() < self.end:
                 try:
                     item = ready.get(timeout=1)
                 except queue.Empty:
@@ -122,11 +125,14 @@ class Session(threading.Thread):
                     break
                 segment, text, path = item
                 if segment is not current:
+                    # A work is begun only if it can be finished before the closing prayer.
+                    if time.monotonic() + speaking_time(segment) > self.end - CLOSING_RESERVE + 30:
+                        break
                     if current is not None:
                         self._wait(GAP_SEGMENT)
                     current = segment
                     self.post("title", segment.title)
-                self._speak(text, path, self.end - CLOSING_RESERVE + 20)
+                self._speak(text, path, self.end)
                 self._wait(GAP_CHUNK)
         finally:
             done.set()

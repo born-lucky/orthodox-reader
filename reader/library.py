@@ -141,6 +141,14 @@ def lxx(psalm: int) -> int:
     return psalm - 1 if 11 <= psalm <= 146 and psalm not in (115, 116) else psalm
 
 
+CHARS_PER_SECOND = 13.0  # the neural voice at a calm pace
+GAP = 2.5                # silence between works
+
+
+def speaking_time(seg: "Segment") -> float:
+    return seg.chars / CHARS_PER_SECOND
+
+
 def cut(lines: list[str], limit: int = SEGMENT_CHARS) -> list[str]:
     out, size = [], 0
     for line in lines:
@@ -158,6 +166,8 @@ class Library:
         self.prayers.update({k: v for k, v in mine.items() if v and k != "source"})
         self.psalter = _mine("psalter.json").get("psalms", {})   # {"50": {"title", "verses"}} (LXX)
         self.hours = _mine("hours.json").get("hours", {})
+        self.works = _mine("works.json")  # whole works from your own books: Prologue, Theophan, Chrysostom
+        self.lxx = {b["name"]: b["chapters"] for b in _load("lxx.json")["books"]}  # Brenton: Wisdom, Sirach...
         self._kjv: dict | None = None
         self.rng = random.Random()
         self._lock = threading.Lock()
@@ -362,18 +372,99 @@ class Library:
                 continue
             stop.wait(pause)
 
+    # ------------------------------------------------------------ works
+
+    def work(self, kind: str) -> Segment | None:
+        """One whole work of a kind, or None if there is none to be had."""
+        mine = self.works
+        pick = self.rng.choice
+        if kind == "prologue" and mine.get("prologue_lives"):
+            w = pick(mine["prologue_lives"])
+            return Segment("life", w["title"], [f"From the Prologue of Ohrid: {w['title']}."] + w["text"])
+        if kind == "homily" and (mine.get("prologue_homilies") or mine.get("prologue_reflections")):
+            w = pick((mine.get("prologue_homilies") or []) + (mine.get("prologue_reflections") or []))
+            return Segment("homily", w["title"], [w["title"] + "."] + w["text"])
+        if kind == "theophan" and mine.get("theophan"):
+            w = pick(mine["theophan"])
+            return Segment("homily", w["title"], [w["title"] + "."] + w["text"])
+        if kind == "chrysostom" and mine.get("chrysostom"):
+            w = pick(mine["chrysostom"])
+            return Segment("homily", w["title"], [w["title"] + "."] + w["text"])
+        if kind == "life":
+            return self.random_life()
+        if kind == "wisdom":
+            book = pick(["Wisdom of Solomon"] * 5 + ["Sirach"] * 4 + ["Tobit", "Baruch"])
+            return self.lxx_chapter(book, self.rng.randint(1, len(self.lxx[book])))
+        if kind == "psalm":
+            return self.psalm() if self.rng.random() < .5 else (
+                self.psalter_psalm(pick(list(self.psalter))) if self.psalter else self.chapter("Psalms", self.rng.randint(1, 150)))
+        if kind == "gospel":
+            book = pick(["Matthew", "Mark", "Luke", "John"])
+            return self.chapter(book, self.rng.randint(1, len(self.kjv[book])))
+        if kind == "epistle":
+            book = pick(SCRIPTURE_PARTS[2][1])
+            return self.chapter(book, self.rng.randint(1, len(self.kjv[book])))
+        if kind == "proverbs":
+            book = pick(["Proverbs", "Ecclesiastes", "Isaiah"])
+            return self.chapter(book, self.rng.randint(1, len(self.kjv[book])))
+        return None
+
+    def lxx_chapter(self, book: str, number: int) -> Segment:
+        title = f"{book}, chapter {number}"
+        return Segment("scripture", title, cut([f"From the {book}, chapter {number}."] + self.lxx[book][number - 1], SEGMENT_CHARS * 2))
+
+    KINDS = {
+        # content setting -> (kind, weight): the variety a break draws from
+        "saints": [("prologue", 5), ("homily", 2), ("theophan", 2), ("chrysostom", 1), ("life", 2)],
+        "scripture": [("wisdom", 4), ("psalm", 3), ("gospel", 3), ("epistle", 2), ("proverbs", 1)],
+    }
+
+    def works_for(self, cfg: dict, seconds: float) -> list[Segment]:
+        """Whole works of different kinds that fit in `seconds` (never cut short)."""
+        want = cfg["content"]
+        if want == "psalter":
+            return self.kathisma()
+        kinds = self.KINDS["saints"] + self.KINDS["scripture"] if want == "mixed" else self.KINDS.get(want, self.KINDS["saints"])
+        bag = [k for k, weight in kinds for _ in range(weight)]
+        out: list[Segment] = []
+        last = None
+        left = seconds
+        misses = 0
+        while left > 45 and misses < 30:
+            kind = self.rng.choice(bag)
+            if kind == last and len(set(bag)) > 1:
+                continue
+            item = self.work(kind)
+            if item is None or not item.lines or speaking_time(item) > left:
+                misses += 1
+                continue
+            out.append(item)
+            left -= speaking_time(item) + GAP
+            last = kind
+            misses = 0
+        return out
+
+    def filler(self, cfg: dict, seconds: float) -> Segment | None:
+        """One more short whole work, if one fits in what is left of the break."""
+        for _ in range(20):
+            item = self.works_for(cfg, seconds)
+            if item:
+                return item[0]
+        return None
+
     # ------------------------------------------------------------ a whole session
 
-    def plan(self, kind: str, cfg: dict, civil: dt.date | None = None) -> tuple[list[Segment], Segment | None]:
+    def plan(self, kind: str, cfg: dict, minutes: float, civil: dt.date | None = None) -> tuple[list[Segment], Segment | None]:
         """What a session reads, in order, and the closing prayer it ends with.
 
-        kind "morning": the day's old-calendar entry, its Scripture, and the lives of
-        the day's saints. kind "break": random lives and Scripture (by cfg["content"]).
-        The list is longer than the session; the session stops when time is up and
-        reads the closing prayer.
+        The opening prayers (or the Hour of the day), then whole works of different
+        kinds chosen to fill the time: a life from the Prologue, a chapter of the
+        Wisdom of Solomon, a thought of St. Theophan, a psalm... Nothing is cut off.
+        kind "morning" reads the morning prayers and the day's readings first.
         """
         segments: list[Segment] = []
         now = dt.datetime.now()
+        civil = civil or dt.date.today()
         office = self.hour(hour_for(now), now.weekday()) if cfg.get("hours") and kind == "break" else []
         if cfg["prayers"]:
             if kind == "morning" and self.prayers.get("morning_full"):
@@ -390,28 +481,19 @@ class Library:
         elif office:
             segments += office
         if kind == "morning":
-            data = self.day(civil or dt.date.today())
+            data = self.day(civil)
             if data:
                 segments.append(self.calendar_segment(data))
                 segments += self.readings(data)
+            j = civil - dt.timedelta(days=13)
+            today = [w for w in self.works.get("prologue_lives") or [] if w.get("when") == f"{j.month}/{j.day}"]
+            segments += [Segment("life", w["title"], [f"From the Prologue of Ohrid: {w['title']}."] + w["text"]) for w in today]
+            if not today and data:
                 segments += self.lives(data)
-        segments += self.random_segments(cfg, 14)
         closing = self.prayer("closing") if cfg["prayers"] else None
+        used = sum(speaking_time(seg) + GAP for seg in segments) + (speaking_time(closing) if closing else 0)
+        segments += self.works_for(cfg, minutes * 60 - used - 30)
         return segments, closing
 
     def random_segments(self, cfg: dict, count: int) -> list[Segment]:
-        out: list[Segment] = []
-        for n in range(count):
-            want = cfg["content"]
-            if want == "psalter":
-                out += self.kathisma()  # one kathisma per call: the place moves on as it is read
-                break
-            if want == "mixed":
-                want = "saints" if n % 2 == 0 else "scripture"
-            item = self.random_life() if want == "saints" else None
-            if item is None:
-                item = self.psalm() if cfg["prayers"] and self.rng.random() < 0.25 else self.random_scripture()
-            out.append(item)
-            if cfg["prayers"] and n % 4 == 3:
-                out.append(self.prayer("middle"))
-        return out
+        return self.works_for(cfg, count * 120)

@@ -59,6 +59,7 @@ class Voice:
         self.voice = cfg["voice"]
         self.rate = int(cfg["rate"])
         self.online = self.voice != "sapi"
+        self.room = cfg.get("room", True)
 
     def make(self, text: str) -> str:
         n = next(_files)
@@ -68,12 +69,23 @@ class Voice:
             try:
                 _edge(text, self.voice, self.rate, path)
                 if path.stat().st_size > 0:
-                    return str(path)
+                    return self._placed(str(path))
             except Exception:
                 self.online = False  # no internet: the Windows voice for the rest of the session
         path = TMP / f"c{n}.wav"
         _sapi(text, self.rate, path)
-        return str(path)
+        return self._placed(str(path))
+
+    def _placed(self, path: str) -> str:
+        """The voice a few metres away in a quiet church, not inside your ears."""
+        if not self.room:
+            return path
+        try:
+            from . import room
+
+            return room.place(path)
+        except Exception:
+            return path
 
 
 def _edge(text: str, voice: str, rate: int, path: Path) -> None:

@@ -351,13 +351,75 @@ def psalter() -> dict:
             "psalms": psalms}
 
 
+def _paragraphs(text: str) -> list[str]:
+    """Book text as spoken paragraphs: line breaks inside a paragraph joined."""
+    text = re.sub(r"-\n(?=[a-z])", "", text or "")
+    paras = [re.sub(r"\s+", " ", p).strip() for p in re.split(r"\n\s*\n|\n(?=[A-Z\"“‘(])", text)]
+    return [p for p in paras if p]
+
+
+def works_from_bot(bot: str, chrysostom_count: int = 240) -> dict:
+    """Whole works from the Daily Readings bot's parsed books (its cache/ and PDFs):
+    every life in the Prologue of Ohrid with its homily and reflection, every thought
+    of St. Theophan, and a few hundred passages of St. John Chrysostom."""
+    root = Path(bot)
+    prologue = json.loads((root / "cache/prologue.json").read_text(encoding="utf-8"))["days"]
+    lives, homilies, reflections = [], [], []
+    for day in prologue:
+        when = f"{day['month']}/{day['day']}"
+        for saint in day.get("saints") or []:
+            title = saint["title"].strip().title().replace("'S ", "'s ")
+            lives.append({"title": title, "text": _paragraphs(saint["body"]), "when": when})
+        if day.get("homily"):
+            homilies.append({"title": "A Homily from the Prologue", "text": _paragraphs(day["homily"]), "when": when})
+        if day.get("reflection"):
+            reflections.append({"title": "A Reflection from the Prologue", "text": _paragraphs(day["reflection"]), "when": when})
+    theophan = [{"title": f"St. Theophan the Recluse: {t['title']}", "text": _paragraphs(t["body"])}
+                for t in json.loads((root / "cache/theophan.json").read_text(encoding="utf-8"))["thoughts"]]
+    chrysostom = []
+    try:
+        import random
+
+        sys.path.insert(0, str(root))
+        import library as bot_library  # the bot's own reader, with its PDF paths
+
+        bot_library.load_dotenv(root / ".env")
+        books = bot_library.Library()
+        books.chrysostom.load()
+        rng = random.Random(7)
+        seen = set()
+        for _ in range(chrysostom_count * 3):
+            try:
+                passage = books.chrysostom.excerpt(rng)
+            except Exception:
+                continue
+            if passage["title"] in seen:
+                continue
+            seen.add(passage["title"])
+            chrysostom.append({"title": f"St. John Chrysostom: {passage['title'].title()}",
+                               "text": _paragraphs(passage["body"])})
+            if len(chrysostom) >= chrysostom_count:
+                break
+        books.close()
+    except Exception as exc:  # the Chrysostom PDF is optional
+        print("  Chrysostom skipped:", exc)
+    return {"source": "The Prologue from Ohrid, Thoughts for Each Day, St. John Chrysostom (private copies)",
+            "prologue_lives": lives, "prologue_homilies": homilies, "prologue_reflections": reflections,
+            "theophan": theophan, "chrysostom": chrysostom}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--jordanville")
     ap.add_argument("--horologion")
     ap.add_argument("--psalter", choices=["liturgy.io"])
+    ap.add_argument("--bot", help="the Daily Readings bot folder (its parsed Prologue, Theophan, Chrysostom)")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
+    if args.bot:
+        data = works_from_bot(args.bot)
+        (OUT / "works.json").write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
+        print("works.json:", {k: len(v) for k, v in data.items() if isinstance(v, list)})
     if args.jordanville:
         data = jordanville(args.jordanville)
         (OUT / "prayers.json").write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
