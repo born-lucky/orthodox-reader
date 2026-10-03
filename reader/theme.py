@@ -20,8 +20,8 @@ import ctypes
 
 from . import settings
 
-PAGE = "#f3ead6"       # parchment
-PAGE_DEEP = "#eadfc5"  # a shaded margin
+PAGE = "#e2dccd"       # a darker off-white, easy on the eyes
+PAGE_DEEP = "#d9d2c1"  # a shaded margin
 INK = "#1c1712"
 FADED = "#9a8c74"      # quiet notes
 OFF = "#6b5f4c"        # an option not chosen: still easy to read, plainly not chosen
@@ -30,7 +30,7 @@ RED_SOFT = "#c44a3a"
 GOLD = "#a9822f"
 
 # The break screen is dark: it is for resting the eyes.
-NIGHT = "#0b0907"
+NIGHT = "#000000"
 NIGHT_INK = "#efe6d2"
 NIGHT_DIM = "#6f6553"
 NIGHT_RED = "#c8553f"
