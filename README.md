@@ -58,15 +58,15 @@ The page ranges match the Holy Trinity Monastery *Prayer Book* (4th ed.) and *Un
 
 ## Design
 
-The window is laid out like a page of a service book: ink on warm paper with a matte grain, **cinnabar red for rubrics** (what you *do*), black for what you *read*, and gold only as a hairline. Dark mode is the same book by lamplight, and it follows Windows unless you choose one. Type: **Ponomar** (the Slavonic Computing Initiative's church face) for the title, and **Literata**, made for long reading on screens, for everything else. Both are SIL Open Font License.
+The look follows NeXT and the early Macintosh: grey and black only, one plain typeface (Helvetica, or Arial where it is missing), and the classic inverse selection (a black block with white text). The day's icon is the only colour on the page. Dark mode is the same, inverted, on black; it follows Windows unless you choose one.
 
 Principles, after the way Steve Jobs thought about design:
 
 1. **Focus is saying no.** The main view shows only what you need every day: today, the next break, three actions, the calendar. Everything else is one quiet link away in Settings.
 2. **Simplicity is the ultimate sophistication.** The defaults work, and every word has to earn its place.
 3. **Design is how it works.** The status says exactly what will happen next, in words; a break is made of whole works, never cut off.
-4. **One accent.** Red means "act" and nothing else. No shadows, outlines or gradients; surfaces are told apart by tone and space.
-5. **Typography matters.** One reading face (Literata) and one ceremonial face (Ponomar), and the text can be selected like any page.
+4. **No decoration.** Grayscale; the only colour is the icon. No shadows, outlines or gradients; surfaces are told apart by tone and space.
+5. **Typography matters.** One face, Helvetica, in a few sizes; the text can be selected like any page.
 6. **Motion explains.** Animations are short, ease out, show where things went, and switch off when Windows asks for reduced motion.
 7. **The back of the fence.** The voice's room, tabular numbers, aligned controls, keyboard access: details nobody points at but everyone feels.
 
@@ -88,4 +88,4 @@ The window is a local page in a chromeless Edge window, served on `127.0.0.1` on
 
 ## License
 
-Code: MIT. Fonts: SIL OFL 1.1 (`data/fonts`). Icons: public-domain reproductions from Wikimedia Commons (`data/icons/SOURCES.txt`). Texts in `data/`: public domain.
+Code: MIT. Icons: public-domain reproductions from Wikimedia Commons (`data/icons/SOURCES.txt`). Texts in `data/`: public domain.

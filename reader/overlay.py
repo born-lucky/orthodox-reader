@@ -121,7 +121,6 @@ class Overlay:
                                                  width=int(w * 0.62), anchor="n", justify="center")
         elif self.style == "text" and primary:
             tags["title"] = c.create_text(w // 2, int(h * 0.16), text="", fill=t.NIGHT_RED, font=(t.RUBRIC, 26))
-            c.create_text(w // 2, int(h * 0.16) + 40, text="☦", fill=GOLD, font=(t.RUBRIC, 20))
             tags["caption"] = c.create_text(w // 2, int(h * 0.46), text="", fill=INK, font=(SERIF, 34),
                                              width=int(w * 0.66), justify="center")
         if primary:
@@ -239,7 +238,7 @@ class Notice:
         win.geometry(f"{w}x{h}+{right - w - 18}+{bottom - h - 18}")
         frame = tk.Frame(win, bg=t.PAGE, highlightbackground=t.GOLD, highlightthickness=1)
         frame.pack(fill="both", expand=True)
-        tk.Label(frame, text="☦  " + text, fg=t.RED, bg=t.PAGE, font=(t.RUBRIC, 13), anchor="w").pack(fill="x", padx=14, pady=(12, 2))
+        tk.Label(frame, text=text, fg=t.RED, bg=t.PAGE, font=(t.RUBRIC, 13), anchor="w").pack(fill="x", padx=14, pady=(12, 2))
         self.count = tk.Label(frame, text="", fg=t.FADED, bg=t.PAGE, font=(SERIF, 10), anchor="w")
         self.count.pack(fill="x", padx=14)
         row = tk.Frame(frame, bg=t.PAGE)

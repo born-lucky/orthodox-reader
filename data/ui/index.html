@@ -6,27 +6,24 @@
 <title>Reader</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23a8261b' stroke='%23c9a24a' stroke-width='3'/%3E%3Cg fill='%23f3ead6'%3E%3Crect x='29' y='9' width='6' height='46'/%3E%3Crect x='24' y='15' width='16' height='4'/%3E%3Crect x='16' y='23' width='32' height='5'/%3E%3Cpolygon points='22,43 42,37 42,41 22,47'/%3E%3C/g%3E%3C/svg%3E">
 <style>
-@font-face { font-family: "Literata"; src: url("/fonts/Literata.ttf") format("truetype"); font-weight: 200 900; font-style: normal; }
-@font-face { font-family: "Literata"; src: url("/fonts/Literata-Italic.ttf") format("truetype"); font-weight: 200 900; font-style: italic; }
-@font-face { font-family: "Ponomar"; src: url("/fonts/Ponomar-Regular.ttf") format("truetype"); }
 
 /* ---------------------------------------------------------------- the two pages
    Light: ink on warm parchment. Dark: the same book by lamplight.
    Cinnabar for what you do; gold only as a hairline. */
 :root {
-  --paper: #e2dccd; --paper-2: #d9d2c1; --card: rgba(255, 250, 238, .28); --line: rgba(110, 88, 50, .24);
-  --ink: #221b14; --ink-2: #5d5143; --ink-3: #8f8270;
-  --red: #a8261b; --red-hover: #8f1f16; --red-soft: rgba(168, 38, 27, .09); --on-red: #fbf5e8;
-  --gold: #a9822f; --track: rgba(80, 60, 30, .10); --shadow: 0 1px 2px rgba(60, 40, 10, .08), 0 6px 20px rgba(60, 40, 10, .07);
-  --grain-opacity: .16; --grain-blend: multiply;
+  --paper: #dcdcdc; --paper-2: #dcdcdc; --card: #ebebeb; --line: #b8b8b8;
+  --ink: #000000; --ink-2: #3c3c3c; --ink-3: #6e6e6e;
+  --red: #000000; --red-hover: #333333; --red-soft: rgba(0, 0, 0, .07); --on-red: #ffffff;
+  --gold: #8a8a8a; --track: #cfcfcf; --shadow: 0 1px 2px rgba(60, 40, 10, .08), 0 6px 20px rgba(60, 40, 10, .07);
+  --grain-opacity: 0; --grain-blend: normal;
   color-scheme: light;
 }
 :root[data-theme="dark"] {
-  --paper: #000000; --paper-2: #000000; --card: rgba(255, 240, 210, .04); --line: rgba(201, 162, 74, .18);
-  --ink: #ece2cd; --ink-2: #b4a68e; --ink-3: #7d7060;
-  --red: #d0584a; --red-hover: #e06a5b; --red-soft: rgba(208, 88, 74, .13); --on-red: #1a120d;
-  --gold: #c4a058; --track: rgba(255, 235, 200, .1); --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
-  --grain-opacity: .06; --grain-blend: screen;  /* barely there: the page stays black */
+  --paper: #000000; --paper-2: #000000; --card: #141414; --line: #333333;
+  --ink: #ffffff; --ink-2: #c8c8c8; --ink-3: #8c8c8c;
+  --red: #ffffff; --red-hover: #dddddd; --red-soft: rgba(255, 255, 255, .08); --on-red: #000000;
+  --gold: #777777; --track: #262626; --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
+  --grain-opacity: 0; --grain-blend: normal;
   color-scheme: dark;
 }
 
@@ -35,7 +32,7 @@ html, body { margin: 0; height: 100%; }
 body {
   background: var(--paper);
   color: var(--ink);
-  font: 400 15.5px/1.5 "Literata", Georgia, serif;
+  font: 400 15px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
   transition: background-color .3s ease, color .3s ease;
@@ -53,17 +50,15 @@ main.ready { opacity: 1; transform: none; }
 
 /* ---------------------------------------------------------------- heading */
 .head { text-align: center; }
-.headpiece { display: block; width: 100%; height: 22px; color: var(--gold); }
-.headpiece .cross { fill: var(--red); }
 .icon { width: 132px; aspect-ratio: 3 / 4; margin: 14px auto 10px; border-radius: 0; overflow: hidden; background: var(--paper-2);
         transition: transform .4s cubic-bezier(.2, .7, .2, 1); }
 .icon:hover { transform: translateY(-2px); }
 .icon img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .6s ease; }
 .icon img.loaded { opacity: 1; }
-h1 { font: 400 40px/1 "Ponomar", "Literata", serif; margin: 14px 0 6px; letter-spacing: .5px; }
+h1 { font: 600 30px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; margin: 16px 0 6px; letter-spacing: -.3px; }
 h1 b { color: var(--red); font-weight: 400; font-size: 1.2em; }
-.date { color: var(--ink-2); font-style: italic; font-size: 14px; }
-.feast { color: var(--red); font-size: 14.5px; margin-top: 2px; min-height: 1.4em; }
+.date { color: var(--ink-3); font-size: 14px; }
+.feast { color: var(--ink); font-size: 14.5px; margin-top: 2px; min-height: 1.4em; }
 
 /* ---------------------------------------------------------------- status */
 .status { margin: 22px 0 16px; padding: 16px 18px; border-radius: 0; background: var(--card); display: flex; align-items: center; gap: 14px; }
@@ -89,7 +84,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; background: 
 :focus-visible { outline: none; } button:focus-visible, [role=switch]:focus-visible { background-color: var(--red-soft); }
 
 /* ---------------------------------------------------------------- groups */
-h2 { font: 400 15px/1 "Ponomar", "Literata", serif; color: var(--red); letter-spacing: .6px; margin: 26px 4px 8px; }
+h2 { font: 600 12px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--ink-3); text-transform: uppercase; letter-spacing: 1px; margin: 26px 4px 8px; }
 .group { background: var(--card); border-radius: 0; overflow: hidden; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 14px; min-height: 50px;
        transition: background-color .15s ease; }
@@ -111,10 +106,10 @@ h2 { font: 400 15px/1 "Ponomar", "Literata", serif; color: var(--red); letter-sp
 .switch { position: relative; width: 46px; height: 28px; flex: none; border-radius: 0; background: var(--track);
           transition: background-color .22s ease; }
 .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 0;
-                 background: #f7f2e7;
+                 background: var(--ink-3);
                  transition: transform .26s cubic-bezier(.3, .7, .2, 1.15), width .15s ease; }
 .switch.on { background: var(--red); }
-.switch.on::after { transform: translateX(18px); }
+.switch.on::after { transform: translateX(18px); background: var(--on-red); }
 .switch:active::after { width: 26px; }
 .switch.on:active::after { transform: translateX(14px); }
 
@@ -142,7 +137,7 @@ h2 { font: 400 15px/1 "Ponomar", "Literata", serif; color: var(--red); letter-sp
 /* calendar */
 .cal { padding: 12px 12px 4px; }
 .calhead { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 8px; }
-.calhead span { font: 400 16px "Ponomar", "Literata", serif; letter-spacing: .4px; }
+.calhead span { font: 600 16px "Helvetica Neue", Helvetica, Arial, sans-serif; letter-spacing: .4px; }
 .calhead button { width: 32px; height: 32px; border-radius: 0; color: var(--red); font-size: 18px; transition: background-color .15s ease, transform .1s ease; }
 .calhead button:hover { background: var(--red-soft); }
 .calhead button:active { transform: scale(.9); }
@@ -187,7 +182,7 @@ button, .seg, .switch, .step, .cell, .wd, .calhead, .legend, .icon { user-select
 body.in-settings .view.home { transform: translateX(-30%); opacity: 0; pointer-events: none; height: 0; overflow: hidden; }
 body.in-settings .view.settings { position: relative; transform: none; opacity: 1; pointer-events: auto; }
 .bar-top { display: flex; align-items: baseline; justify-content: space-between; margin: 4px 0 6px; }
-.bar-top h3 { font: 400 26px/1 "Ponomar", "Literata", serif; margin: 0; }
+.bar-top h3 { font: 600 26px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; margin: 0; }
 .link { color: var(--red); font-size: 15px; padding: 6px 2px; transition: opacity .15s ease; }
 .link:hover { opacity: .7; }
 .more { display: block; margin: 26px auto 0; }
@@ -198,15 +193,8 @@ body.in-settings .view.settings { position: relative; transform: none; opacity: 
 <body>
 <main id="main"><div class="views"><section class="view home">
   <div class="head">
-    <svg class="headpiece" viewBox="0 0 500 22" preserveAspectRatio="none" aria-hidden="true">
-      <g stroke="currentColor" stroke-width="1"><line x1="0" y1="8" x2="222" y2="8"/><line x1="0" y1="14" x2="222" y2="14"/>
-      <line x1="278" y1="8" x2="500" y2="8"/><line x1="278" y1="14" x2="500" y2="14"/></g>
-      <g fill="currentColor"><path d="M40 7l4 4-4 4-4-4z"/><path d="M110 7l4 4-4 4-4-4z"/><path d="M180 7l4 4-4 4-4-4z"/>
-      <path d="M320 7l4 4-4 4-4-4z"/><path d="M390 7l4 4-4 4-4-4z"/><path d="M460 7l4 4-4 4-4-4z"/></g>
-      <g class="cross"><rect x="248.5" y="1" width="3" height="20"/><rect x="246" y="4" width="8" height="2"/><rect x="242" y="8" width="16" height="2.4"/><path d="M244 16l12-3v2l-12 3z"/></g>
-    </svg>
     <div class="icon"><img id="icon" alt=""></div>
-    <h1><b>R</b>eader</h1>
+    <h1>Reader</h1>
     <div class="date" id="date"></div>
     <div class="feast" id="feast"></div>
     <div class="fast" id="fast"><span class="dot"></span><span></span></div>
@@ -232,7 +220,7 @@ body.in-settings .view.settings { position: relative; transform: none; opacity: 
   <div class="group cal">
     <div class="calhead"><button id="prev" aria-label="Previous month">‹</button><span id="mname"></span><button id="nextm" aria-label="Next month">›</button></div>
     <div class="grid" id="grid"></div>
-    <div class="legend"><span><i class="dot strict"></i>Strict fast</span><span><i class="dot relaxed"></i>Fish, wine or oil</span><span><span style="color:var(--red)">✚</span>Great feast</span></div>
+    <div class="legend"><span><i class="dot strict"></i>Strict fast</span><span><i class="dot relaxed"></i>Fish, wine or oil</span><span><span>✚</span>Great feast</span></div>
     <div class="detail" id="detail"></div>
   </div>
 

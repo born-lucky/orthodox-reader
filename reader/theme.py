@@ -20,25 +20,25 @@ import ctypes
 
 from . import settings
 
-PAGE = "#e2dccd"       # a darker off-white, easy on the eyes
-PAGE_DEEP = "#d9d2c1"  # a shaded margin
-INK = "#1c1712"
-FADED = "#9a8c74"      # quiet notes
-OFF = "#6b5f4c"        # an option not chosen: still easy to read, plainly not chosen
-RED = "#a8261b"        # cinnabar
-RED_SOFT = "#c44a3a"
-GOLD = "#a9822f"
+PAGE = "#dcdcdc"       # NeXT grey
+PAGE_DEEP = "#cfcfcf"
+INK = "#000000"
+FADED = "#6e6e6e"      # quiet notes
+OFF = "#6e6e6e"        # an option not chosen: still easy to read, plainly not chosen
+RED = "#000000"        # the accent is ink itself
+RED_SOFT = "#3c3c3c"
+GOLD = "#8a8a8a"
 
 # The break screen is dark: it is for resting the eyes.
 NIGHT = "#000000"
-NIGHT_INK = "#efe6d2"
-NIGHT_DIM = "#6f6553"
-NIGHT_RED = "#c8553f"
-NIGHT_GOLD = "#c9a24a"
+NIGHT_INK = "#ffffff"
+NIGHT_DIM = "#6e6e6e"
+NIGHT_RED = "#c8c8c8"
+NIGHT_GOLD = "#555555"
 
-RUBRIC = "Ponomar"
-BOOK = "Literata 12pt"   # the name Windows gives the variable font's text instance
-BOOK_BOLD = "Literata 12pt SemiBold"
+RUBRIC = "Arial"        # Helvetica's stand-in on Windows
+BOOK = "Arial"
+BOOK_BOLD = "Arial"
 
 _loaded = False
 
