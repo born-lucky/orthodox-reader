@@ -261,3 +261,28 @@ class Notice:
     def close(self) -> None:
         if self.win.winfo_exists():
             self.win.destroy()
+
+
+class Toast:
+    """A quiet note in the corner that leaves by itself: "Today: Fast day · strict"."""
+
+    def __init__(self, root: tk.Tk, text: str, sub: str = "", seconds: int = 14) -> None:
+        win = self.win = tk.Toplevel(root)
+        win.overrideredirect(True)
+        win.attributes("-topmost", True)
+        win.configure(bg=t.PAGE)
+        w, h = 380, 84 if sub else 58
+        _, _, right, bottom = work_area()
+        win.geometry(f"{w}x{h}+{right - w - 18}+{bottom - h - 18}")
+        frame = tk.Frame(win, bg=t.PAGE, highlightbackground=t.INK, highlightthickness=1)
+        frame.pack(fill="both", expand=True)
+        tk.Label(frame, text=text, fg=t.INK, bg=t.PAGE, font=(t.RUBRIC, 12, "bold"), anchor="w").pack(fill="x", padx=14, pady=(12, 0))
+        if sub:
+            tk.Label(frame, text=sub, fg=t.FADED, bg=t.PAGE, font=(t.RUBRIC, 10), anchor="w").pack(fill="x", padx=14, pady=(2, 10))
+        for widget in (win, frame):
+            widget.bind("<Button-1>", lambda e: self.close())
+        win.after(seconds * 1000, self.close)
+
+    def close(self) -> None:
+        if self.win.winfo_exists():
+            self.win.destroy()

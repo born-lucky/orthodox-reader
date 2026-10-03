@@ -33,7 +33,7 @@ SECONDS = 75
 FADE = 3.0
 FOLDER = settings.HOME
 TAU = 2 * math.pi
-TARGET_RMS = 10 ** (-31 / 20)  # the garden's loudness at volume 100
+TARGET_RMS = 10 ** (-35 / 20)  # the garden's loudness at volume 100
 HEAD = 0.00066                  # seconds: the largest interaural time difference
 
 
@@ -54,7 +54,7 @@ def _note(track: np.ndarray, at: float, dur: float, f0: float, f1: float, amp: f
 
 
 def _whistle(tr, rng, at, amp):
-    hi = rng.uniform(3600, 4100)
+    hi = rng.uniform(2400, 2900)
     _note(tr, at, rng.uniform(0.3, 0.4), hi, hi * 0.98, amp, harmonic=0.03)
     lo = hi * rng.uniform(0.8, 0.86)
     _note(tr, at + 0.45, rng.uniform(0.32, 0.42), lo, lo * 0.98, amp, harmonic=0.03)
@@ -63,25 +63,26 @@ def _whistle(tr, rng, at, amp):
 def _phrase(tr, rng, at, amp):
     t = at
     for _ in range(rng.randint(3, 7)):
-        f0 = rng.uniform(2100, 3300)
-        d = rng.uniform(0.07, 0.17)
-        _note(tr, t, d, f0, f0 + rng.uniform(-700, 700), amp * rng.uniform(0.7, 1.0))
+        f0 = rng.uniform(1500, 2500)
+        d = rng.uniform(0.12, 0.24)
+        _note(tr, t, d, f0, f0 + rng.uniform(-400, 400), amp * rng.uniform(0.7, 1.0), harmonic=0.04)
         t += d + rng.uniform(0.04, 0.12)
 
 
 def _trill(tr, rng, at, amp):
-    base = rng.uniform(3900, 4600)
+    """A blackbird's turn: a few slow, rounded notes (no fast, sharp trill)."""
+    base = rng.uniform(1700, 2300)
     t = at
-    for k in range(rng.randint(10, 22)):
-        f = base + (220 if k % 2 else -220)
-        _note(tr, t, 0.028, f, f - 300, amp * (0.6 + 0.4 * math.sin(math.pi * k / 22)))
-        t += 0.043
+    for k in range(rng.randint(4, 7)):
+        f = base * (1 + 0.12 * math.sin(k * 1.7))
+        _note(tr, t, 0.11, f, f * 0.94, amp * (0.6 + 0.4 * math.sin(math.pi * k / 7)), harmonic=0.03)
+        t += 0.16
 
 
 def _warble(tr, rng, at, amp):
-    f0 = rng.uniform(2600, 3200)
-    _note(tr, at, rng.uniform(0.5, 0.8), f0, f0 + rng.uniform(300, 800), amp,
-          vibrato=(rng.uniform(24, 36), rng.uniform(300, 520)))
+    f0 = rng.uniform(1800, 2300)
+    _note(tr, at, rng.uniform(0.5, 0.8), f0, f0 + rng.uniform(150, 400), amp, harmonic=0.03,
+          vibrato=(rng.uniform(9, 14), rng.uniform(80, 160)))
 
 
 SONGS = [_whistle, _phrase, _trill, _warble]
@@ -137,14 +138,15 @@ def render(seed: int = 7) -> np.ndarray:
         t = rng.uniform(0.5, 6.0)
         while t < SECONDS + FADE - 2:
             song(track, rng, t, rng.uniform(0.75, 1.0))
-            t += rng.uniform(4.0, 12.0)
+            t += rng.uniform(6.0, 16.0)  # unhurried
         birds += _place(track, azimuth + rng.uniform(-8, 8), distance)
     # The garden's echo: more of it for the far birds, as outdoors.
     ir = _garden(total, nrng)
     size = 1 << (total + len(ir)).bit_length()
     wet = np.stack([np.fft.irfft(np.fft.rfft(birds.mean(axis=1), size) * np.fft.rfft(ir[:, ch], size), size)[:total]
                     for ch in range(2)], axis=1)
-    mix = birds * 0.8 + wet * 0.45
+    birds = np.stack([_lowpass(birds[:, ch], 4200.0) for ch in range(2)], axis=1)  # no brittle edge
+    mix = birds * 0.55 + wet * 0.6  # farther back: more garden than bird
     # The brook: far off and low, slowly breathing, a little wider than the birds.
     noise = nrng.standard_normal((total, 2))
     brook = np.stack([_lowpass(_lowpass(noise[:, ch], 700.0), 900.0) for ch in range(2)], axis=1)
@@ -166,7 +168,7 @@ def ensure(volume: int = 30) -> str:
     The level is in the file itself, so it plays at full scale and the balance against
     the voice is exact: at 30 it sits about 12 dB under the voice at 70."""
     volume = max(0, min(100, int(round(volume / 5) * 5)))
-    path = FOLDER / f"ambience-v4-{volume:03d}.wav"
+    path = FOLDER / f"ambience-v6-{volume:03d}.wav"
     if path.is_file():
         return str(path)
     mix = render() * (volume / 100)

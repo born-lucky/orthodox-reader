@@ -15,6 +15,7 @@ import time
 
 from . import ambience, audio, speech
 from .library import Library, Segment, speaking_time
+from .room import TAIL_SECONDS
 
 CLOSING_RESERVE = 75   # seconds kept for the closing prayer
 OVERRUN = 90           # the closing prayer may run this far past the end
@@ -23,15 +24,18 @@ GAP_SEGMENT = 1.6
 
 
 class Session(threading.Thread):
-    def __init__(self, kind: str, cfg: dict, library: Library, post, minutes: float | None = None) -> None:
+    def __init__(self, kind: str, cfg: dict, library: Library, post, minutes: float | None = None,
+                 civil=None) -> None:
         super().__init__(name="reader-session", daemon=True)
         self.kind = kind
         self.cfg = dict(cfg)
         self.library = library
         self.post = post
         self.seconds = (minutes if minutes is not None else cfg["break_minutes"]) * 60
+        self.civil = civil  # kind "day": the calendar day to read
         self._stop = threading.Event()
         self._sound: audio.Sound | None = None
+        self._ringing: list = []  # sentences whose room echo is still sounding
         self.title = ""
 
     def stop(self) -> None:
@@ -59,7 +63,7 @@ class Session(threading.Thread):
                 except OSError:
                     amb = None
             self.post("title", "Preparing the readings…")
-            segments, closing = self.library.plan(self.kind, self.cfg, self.seconds / 60)
+            segments, closing = self.library.plan(self.kind, self.cfg, self.seconds / 60, civil=self.civil)
             voice = speech.Voice(self.cfg)
             closing_files = [(c, voice.make(c)) for line in (closing.lines if closing else []) for c in speech.chunks(line)]
             self._read(segments, voice)
@@ -76,6 +80,7 @@ class Session(threading.Thread):
                 amb.close()
             if self._sound is not None:
                 self._sound.close()
+            self._close_rung(everything=True)
             self.post("end", reason)
 
     def stopped_fn(self) -> bool:
@@ -154,14 +159,35 @@ class Session(threading.Thread):
         except OSError:
             return
         self._sound = sound
+        # A sentence in the room ends with its echo; the next sentence begins while that
+        # echo is still ringing, as in a real room, instead of after silence.
+        tail = TAIL_SECONDS - 0.15 if path.endswith("-room.wav") else 0.0
         try:
             sound.play()
+            started = time.monotonic()
+            spoken = max(0.2, sound.length() - tail)
             time.sleep(0.15)
             while sound.playing() and not self.stopped and time.monotonic() < limit:
-                time.sleep(0.1)
+                if time.monotonic() - started >= spoken:
+                    self._ringing.append((sound, started + spoken + tail + 0.3))
+                    sound = None
+                    break
+                time.sleep(0.05)
         finally:
-            sound.close()
+            if sound is not None:
+                sound.close()
             self._sound = None
+            self._close_rung()
+
+    def _close_rung(self, everything: bool = False) -> None:
+        now = time.monotonic()
+        keep = []
+        for sound, until in self._ringing:
+            if everything or now >= until or not sound.playing():
+                sound.close()
+            else:
+                keep.append((sound, until))
+        self._ringing = keep
 
     def _wait(self, seconds: float) -> None:
         self._stop.wait(seconds)

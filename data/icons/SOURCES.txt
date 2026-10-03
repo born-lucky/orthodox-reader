@@ -14,3 +14,4 @@ apostle_paul.jpg           Apostle Paul.jpg
 evangelist_luke.jpg        Luke the Evangelist.jpg
 evangelist_mark.jpg        Mark the Evangelist.jpg
 trinity.jpg                Andrei Rublev, Hospitality of Abraham
+angel_golden_hair.jpg      The Angel with Golden Hair (Novgorod, c. 1200), Russian Museum; Google Art Project

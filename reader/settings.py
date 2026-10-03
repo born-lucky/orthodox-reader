@@ -40,6 +40,9 @@ DEFAULTS = {
     "warn_seconds": 60,
     "emergency_exit": True,    # hold Ctrl+Alt+Shift+End to end a locked break
     "autostart": True,
+    "week_start": "monday",    # the calendar: "monday" | "sunday"
+    "old_dates": True,         # the calendar: old-style dates under each day
+    "fast_reminder": True,     # a quiet note at the start of a fast day
     "theme": "system",         # "system" | "light" | "dark"
 }
 

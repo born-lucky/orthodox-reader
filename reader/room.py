@@ -45,8 +45,9 @@ ORDER = 9                     # bounces computed exactly
 EARLY = 0.20                  # seconds of exact reflections; the diffuse tail after
 RT60 = 1.8
 HEAD = 0.0875                 # head radius, m
-TARGET_RMS = 10 ** (-27 / 20)
+TARGET_RMS = 10 ** (-30 / 20)
 CEILING = 10 ** (-6 / 20)
+TAIL_SECONDS = 1.2            # each sentence's file ends with the room still ringing
 
 
 def _decode(path: Path) -> np.ndarray:
@@ -166,6 +167,31 @@ def _convolve(x: np.ndarray, ir: np.ndarray) -> np.ndarray:
                     axis=1).astype(np.float32)
 
 
+def soften(voice: np.ndarray) -> np.ndarray:
+    """Make a bright, close text-to-speech voice gentle to listen to for a long time,
+    the way a voice is treated for late-night radio or an audiobook:
+
+      warmth     the highs roll off from ~3.8 kHz, as through a wooden door
+      presence   a dip of ~4 dB at 2.5-4.5 kHz, where a voice sounds forceful and near
+      body       +2 dB around 250 Hz, so it stays full, not thin
+      evenness   a slow, gentle compressor (2:1): loud syllables are eased down
+    """
+    n = len(voice)
+    f = np.fft.rfftfreq(n, 1 / RATE)
+    gain = 1 / np.sqrt(1 + (f / 3800) ** 4)                                  # warmth
+    gain *= 1 - 0.37 * np.exp(-0.5 * ((f - 3400) / 900) ** 2)                # presence dip
+    gain *= 1 + 0.26 * np.exp(-0.5 * ((f - 250) / 120) ** 2)                 # body
+    gain /= np.sqrt(1 + (85 / np.maximum(f, 1)) ** 4)                         # no boom
+    x = np.fft.irfft(np.fft.rfft(voice) * gain, n).astype(np.float32)
+    # Compressor: an RMS envelope over ~40 ms; above the threshold, half the excess.
+    win = int(0.04 * RATE)
+    env = np.sqrt(np.convolve(x ** 2, np.ones(win) / win, mode="same")) + 1e-6
+    threshold = np.percentile(env, 70)
+    over = np.maximum(env / threshold, 1.0)
+    x *= over ** (1 / 2 - 1)  # ratio 2:1
+    return x
+
+
 def place(src: str, volume: float = 1.0) -> str:
     """Send one spoken chunk through the room to the two ears; returns a new stereo WAV.
     `volume` (0-1) is applied here, in the file, so playback can stay at full scale."""
@@ -173,12 +199,14 @@ def place(src: str, volume: float = 1.0) -> str:
     voice = _decode(path)
     if not len(voice):
         return src
-    voice = voice - _lowpass(voice, 90.0)  # no close-microphone boom
+    voice = soften(voice)
     out = _convolve(voice, brir())
     rms = float(np.sqrt(np.mean(out[: len(voice)] ** 2))) or 1.0
     out *= TARGET_RMS / rms * volume
     out = np.tanh(out / CEILING) * CEILING
-    out = out[: len(voice) + int(RATE * 1.2)]  # the room rings on into the pause
+    out = out[: len(voice) + int(RATE * TAIL_SECONDS)]  # the room rings on into the next sentence
+    rise = int(RATE * 0.01)
+    out[:rise] *= np.linspace(0, 1, rise, dtype=np.float32)[:, None]  # no click at the start
     fade = int(RATE * 0.6)
     out[-fade:] *= np.linspace(1, 0, fade, dtype=np.float32)[:, None]
     dest = path.with_name(path.stem + "-room.wav")

@@ -536,6 +536,18 @@ class Library:
                 segments.append(self.prayer("opening"))
         elif office:
             segments += office
+        if kind == "day":  # a day chosen in the calendar: its Scripture and its saints, nothing else
+            data = self.day(civil)
+            segments = [self.prayer("opening")] if cfg["prayers"] else []
+            if data:
+                segments.append(self.calendar_segment(data))
+                segments += self.readings(data)
+            j = civil - dt.timedelta(days=13)
+            saints = [w for w in self.works.get("prologue_lives") or [] if w.get("when") == f"{j.month}/{j.day}"]
+            segments += [Segment("life", w["title"], [f"From the Prologue of Ohrid: {w['title']}."] + w["text"]) for w in saints]
+            if not saints and data:
+                segments += self.lives(data)
+            return segments, (self.prayer("closing") if cfg["prayers"] else None)
         if kind == "morning":
             data = self.day(civil)
             if data:

@@ -9,7 +9,7 @@ import threading
 import time
 import tkinter as tk
 
-from PIL import Image, ImageDraw, ImageTk
+from PIL import Image, ImageTk
 
 from . import activity, audio, overlay, settings, speech, webui
 from . import library as lib
@@ -22,18 +22,16 @@ log = logging.getLogger("reader")
 
 
 
-def cross_image(size: int = 64) -> Image.Image:
-    """The three-bar cross, parchment on a cinnabar field with a gold rim: the tray and window icon."""
-    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    d.ellipse((1, 1, size - 2, size - 2), fill=(168, 38, 27, 255), outline=(201, 162, 74, 255), width=max(2, size // 20))
-    s = size / 64
-    gold = (243, 234, 214, 255)
-    d.rectangle((29 * s, 9 * s, 35 * s, 55 * s), fill=gold)          # upright
-    d.rectangle((24 * s, 15 * s, 40 * s, 19 * s), fill=gold)         # title board
-    d.rectangle((16 * s, 23 * s, 48 * s, 28 * s), fill=gold)         # arms
-    d.polygon([(22 * s, 43 * s), (42 * s, 37 * s), (42 * s, 41 * s), (22 * s, 47 * s)], fill=gold)  # footrest
-    return img
+ANGEL = settings.DATA / "icons" / "angel_golden_hair.jpg"
+
+
+def angel_image(size: int = 64) -> Image.Image:
+    """The face of the Angel with the Golden Hair (Novgorod, c. 1200): the tray and window icon."""
+    img = Image.open(ANGEL).convert("RGB")
+    w, h = img.size
+    side = int(w * 0.625)
+    left, top = int(w * 0.18), int(h * 0.205)
+    return img.crop((left, top, left + side, top + side)).resize((size, size), Image.LANCZOS)
 
 
 def julian(day: dt.date) -> dt.date:
@@ -73,7 +71,7 @@ class App:
         # Tk only draws the break screens; the window is a local page (webui).
         root = self.root = tk.Tk()
         root.withdraw()
-        self._icon = ImageTk.PhotoImage(cross_image(64))
+        self._icon = ImageTk.PhotoImage(angel_image(64))
         root.iconphoto(True, self._icon)
         self.web = webui.Server(self.web_state, self.web_call, self.today_icon, self.web_month)
         if not start_hidden:
@@ -87,8 +85,7 @@ class App:
     # ------------------------------------------------------------ the window (webui)
 
     def today_icon(self) -> str:
-        today = dt.date.today()
-        return overlay.pick_icon(self.library.headline(today), seed=today.toordinal())
+        return str(ANGEL)  # the window's one image: the angel
 
     def web_state(self) -> dict:
         """Everything the page shows, read on the server thread."""
@@ -129,14 +126,40 @@ class App:
             item.update(day=day, old=f"{j:%B} {j.day}", weekday=civil.weekday(), iso=civil.isoformat())
             out.append(item)
         return {"year": year, "month": month, "name": dt.date(year, month, 1).strftime("%B %Y"),
-                "first": dt.date(year, month, 1).weekday(), "days": out}
+                "first": dt.date(year, month, 1).weekday(), "days": out, "ahead": self._ahead()}
+
+    def _ahead(self) -> dict:
+        """The next great feast and the next fast season, from today, with days to go."""
+        today = dt.date.today()
+        feast = season = None
+        y, m = today.year, today.month
+        current_season = None
+        for _ in range(5):
+            for day, data in sorted(self.library.civil_month(y, m).items()):
+                civil = dt.date(y, m, day)
+                if civil < today:
+                    continue
+                info = lib.summary(data)
+                name = (data.get("fast_level_desc") or "").strip()
+                seasonal = name and name.lower() not in ("fast", "no fast", "fast free")
+                if civil == today:
+                    current_season = name if seasonal else None
+                if feast is None and info["feast"] == "great" and civil > today:
+                    feast = {"name": (info["feasts"] or [info["title"]])[0], "iso": civil.isoformat(),
+                             "days": (civil - today).days}
+                if season is None and seasonal and name != current_season and civil > today:
+                    season = {"name": name, "iso": civil.isoformat(), "days": (civil - today).days}
+            if feast and season:
+                break
+            y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+        return {"feast": feast, "season": season, "now": current_season}
 
     def web_call(self, kind: str, payload: dict) -> None:
         """From the server thread: queue it for the Tk thread."""
         if kind == "set" and payload.get("key") in settings.DEFAULTS:
             self.events.put(("set", (payload["key"], payload.get("value"))))
         elif kind == "do":
-            self.events.put(("do", payload.get("action")))
+            self.events.put(("do", payload.get("action") if not payload.get("day") else ("day", payload["day"])))
 
     def _set(self, key: str, value) -> None:
         kind = type(settings.DEFAULTS[key])
@@ -153,7 +176,13 @@ class App:
             except OSError:
                 log.exception("autostart")
 
-    def _do(self, action: str) -> None:
+    def _do(self, action) -> None:
+        if isinstance(action, tuple) and action[0] == "day":  # read a chosen calendar day
+            try:
+                self.start("day", "listen", civil=dt.date.fromisoformat(action[1]))
+            except ValueError:
+                pass
+            return
         if action == "break":
             self.start("break", self.cfg["mode"])
         elif action == "listen":
@@ -191,7 +220,7 @@ class App:
             pystray.Menu.SEPARATOR,
             item("Quit", lambda: self.events.put(("quit", None))),
         )
-        self.tray = pystray.Icon("OrthodoxReader", cross_image(64), "Reader", menu)
+        self.tray = pystray.Icon("OrthodoxReader", angel_image(64), "Reader", menu)
         self.tray.run_detached()
 
     def _tray_update(self) -> None:
@@ -252,6 +281,8 @@ class App:
 
     def _on(self, event: str) -> None:
         log.info("event %s", event)
+        if event == "new_day" and self.cfg.get("fast_reminder", True):
+            self.root.after(8000, self._fast_note)
         if event == "new_day":
             threading.Thread(target=self._fetch_today, daemon=True).start()
             if self.cfg["enabled"] and self.cfg["morning"]:
@@ -260,6 +291,14 @@ class App:
             self._heads_up("Time for a break", "break")
         elif event == "break" and self.cfg["enabled"] and self.notice is None:
             self.start("break", self.cfg["mode"])
+
+    def _fast_note(self) -> None:
+        """At the start of the day: is today a fast day? A quiet note that leaves by itself."""
+        data = self.library.day(dt.date.today(), fetch=False)
+        if not data:
+            return
+        info = lib.summary(data)
+        overlay.Toast(self.root, "Today: " + info["fast_text"], info.get("title", ""))
 
     def _heads_up(self, text: str, kind: str) -> None:
         if self.notice is not None:
@@ -286,13 +325,13 @@ class App:
 
     # ------------------------------------------------------------ sessions
 
-    def start(self, kind: str, mode: str) -> None:
+    def start(self, kind: str, mode: str, civil: dt.date | None = None) -> None:
         if self.session is not None:
             return
         if self.notice is not None:
             self.notice.close()
             self.notice = None
-        minutes = self.cfg["morning_minutes"] if kind == "morning" else self.cfg["break_minutes"]
+        minutes = self.cfg["morning_minutes"] if kind in ("morning", "day") else self.cfg["break_minutes"]
         end = time.monotonic() + minutes * 60
         if mode == "lock":
             hint = "Hold Ctrl+Alt+Shift+End for 3 seconds to end early" if self.cfg["emergency_exit"] else ""
@@ -303,7 +342,7 @@ class App:
             self.lock.start()
         elif self.cfg["read_along"]:
             self.screen = overlay.ReadAlong(self.root, end, self.stop_session)
-        self.session = Session(kind, self.cfg, self.library, self._post, minutes)
+        self.session = Session(kind, self.cfg, self.library, self._post, minutes, civil=civil)
         self.session.start()
 
     def _post(self, kind: str, value: str) -> None:

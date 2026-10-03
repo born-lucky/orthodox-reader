@@ -76,6 +76,13 @@ class Server:
                 if path == "/icon":
                     f = Path(server.icon_path())
                     return self._send(200, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "image/jpeg")
+                if path == "/favicon.png":
+                    from PIL import Image
+                    import io
+
+                    buf = io.BytesIO()
+                    Image.open(server.icon_path()).convert("RGB").resize((64, 82)).save(buf, "PNG")
+                    return self._send(200, buf.getvalue(), "image/png")
                 if path == "/api/state":
                     return self._send(200, json.dumps(server.state()).encode(), "application/json")
                 if path == "/api/month":

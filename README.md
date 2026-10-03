@@ -3,7 +3,7 @@
 A quiet Orthodox companion for Windows. Every two hours of work it takes a fifteen-minute break with you: it prays, reads the lives of the saints and Holy Scripture aloud over soft birdsong, and shows an icon. When a new day begins (it notices you slept) it reads the morning prayers and the day's readings from the old calendar.
 
 - **Two kinds of break.** *Lock screen*: a full-screen icon, the words being read, or darkness, with the mouse and keyboard held for the break. *Audio only*: the reading plays while you keep working, with an optional small window to read along.
-- **The day by the old calendar.** The day's feast, fast (strict, or fish/wine/oil allowed) and saints, a month calendar of fasts and feasts, and the appointed Scripture readings, from [orthocal.info](https://orthocal.info).
+- **The day by the old calendar.** The day's feast, fast (strict, or fish/wine/oil allowed) and saints, a month calendar of fasts and feasts with old-style dates, the next great feast and the next fast season, and the appointed Scripture readings, from [orthocal.info](https://orthocal.info). Any day can be read aloud, and a quiet note marks a fast day in the morning.
 - **The Hours.** With a Horologion, each break can begin with the Hour of the day: the First, Third, Sixth, Ninth Hour, or Compline.
 - **Whole works, never cut off.** Each break is filled with complete pieces of different kinds that fit the time: a chapter of the Wisdom of Solomon or Sirach (Brenton's Septuagint), a psalm, a Gospel or Epistle chapter, a life of a saint, and, from your own books, a life from the Prologue of Ohrid, a thought of St. Theophan, or a homily of St. John Chrysostom.
 - **A free voice, in a room.** Microsoft's neural voices through `edge-tts` when online, and the Windows voice offline. No account, no key, no cost. The voice is placed a few metres away in a quiet stone church (distance, early reflections, a soft stereo tail) and kept at a calm level, so it never sits inside your ears.
@@ -58,15 +58,15 @@ The page ranges match the Holy Trinity Monastery *Prayer Book* (4th ed.) and *Un
 
 ## Design
 
-The look follows NeXT and the early Macintosh: grey and black only, one plain typeface (Helvetica, or Arial where it is missing), and the classic inverse selection (a black block with white text). The day's icon is the only colour on the page. Dark mode is the same, inverted, on black; it follows Windows unless you choose one.
+The look is NeXTSTEP: its four greys (black, dark grey, light grey, white), Helvetica (Arial where it is missing), a black title bar, 1-pixel bevels lit from the top left, etched boxes, button matrices where the chosen button is pressed in and white, and check boxes. The one image is the *Angel with the Golden Hair* (Novgorod, c. 1200), which is also the app icon. Dark mode is the same machine with the lights down; it follows Windows unless you choose one.
 
 Principles, after the way Steve Jobs thought about design:
 
 1. **Focus is saying no.** The main view shows only what you need every day: today, the next break, three actions, the calendar. Everything else is one quiet link away in Settings.
 2. **Simplicity is the ultimate sophistication.** The defaults work, and every word has to earn its place.
 3. **Design is how it works.** The status says exactly what will happen next, in words; a break is made of whole works, never cut off.
-4. **No decoration.** Grayscale; the only colour is the icon. No shadows, outlines or gradients; surfaces are told apart by tone and space.
-5. **Typography matters.** One face, Helvetica, in a few sizes; the text can be selected like any page.
+4. **No decoration.** NeXT's greys; the only colour is the angel. No shadows, outlines or gradients; surfaces are told apart by tone and space.
+5. **Typography matters.** One face, Helvetica, in a few sizes and weights; the text can be selected like any page.
 6. **Motion explains.** Animations are short, ease out, show where things went, and switch off when Windows asks for reduced motion.
 7. **The back of the fence.** The voice's room, tabular numbers, aligned controls, keyboard access: details nobody points at but everyone feels.
 

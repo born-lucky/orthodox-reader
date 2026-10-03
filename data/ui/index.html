@@ -4,283 +4,225 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reader</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23a8261b' stroke='%23c9a24a' stroke-width='3'/%3E%3Cg fill='%23f3ead6'%3E%3Crect x='29' y='9' width='6' height='46'/%3E%3Crect x='24' y='15' width='16' height='4'/%3E%3Crect x='16' y='23' width='32' height='5'/%3E%3Cpolygon points='22,43 42,37 42,41 22,47'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="icon" id="favicon">
 <style>
-
-/* ---------------------------------------------------------------- the two pages
-   Light: ink on warm parchment. Dark: the same book by lamplight.
-   Cinnabar for what you do; gold only as a hairline. */
+/* ----------------------------------------------------------------------------
+   NeXTSTEP. The 2-bit palette (black, dark grey, light grey, white), Helvetica,
+   1-pixel bevels lit from the top left, a black title bar, etched boxes, button
+   matrices, and white for what is chosen. Nothing else.
+   ---------------------------------------------------------------------------- */
 :root {
-  --paper: #dcdcdc; --paper-2: #dcdcdc; --card: #ebebeb; --line: #b8b8b8;
-  --ink: #000000; --ink-2: #3c3c3c; --ink-3: #6e6e6e;
-  --red: #000000; --red-hover: #333333; --red-soft: rgba(0, 0, 0, .07); --on-red: #ffffff;
-  --gold: #8a8a8a; --track: #cfcfcf; --shadow: 0 1px 2px rgba(60, 40, 10, .08), 0 6px 20px rgba(60, 40, 10, .07);
-  --grain-opacity: 0; --grain-blend: normal;
+  --black: #000; --dark: #555; --light: #aaa; --white: #fff;
+  --face: var(--light);
+  --well: var(--white);
+  --ink: var(--black); --muted: #333;
+  --hi: var(--white); --lo: var(--black); --lo2: var(--dark);
+  --chosen: var(--white);
+  --title: var(--black); --title-ink: var(--white);
   color-scheme: light;
 }
-:root[data-theme="dark"] {
-  --paper: #000000; --paper-2: #000000; --card: #141414; --line: #333333;
-  --ink: #ffffff; --ink-2: #c8c8c8; --ink-3: #8c8c8c;
-  --red: #ffffff; --red-hover: #dddddd; --red-soft: rgba(255, 255, 255, .08); --on-red: #000000;
-  --gold: #777777; --track: #262626; --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px rgba(0, 0, 0, .3);
-  --grain-opacity: 0; --grain-blend: normal;
+:root[data-theme="dark"] {        /* the same machine with the lights down */
+  --face: #2b2b2b; --well: #141414; --ink: #f0f0f0; --muted: #a8a8a8;
+  --hi: #5c5c5c; --lo: #000; --lo2: #141414; --chosen: #6a6a6a;
+  --title: #000; --title-ink: #f0f0f0;
   color-scheme: dark;
 }
-
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; }
-body {
-  background: var(--paper);
-  color: var(--ink);
-  font: 400 15px/1.5 "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-optical-sizing: auto;
-  -webkit-font-smoothing: antialiased;
-  transition: background-color .3s ease, color .3s ease;
-}
-/* The matte finish: fine paper grain over everything, never in the way. */
-body::before {
-  content: ""; position: fixed; inset: -50%; pointer-events: none; z-index: 100;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .42 0 0 0 0 .3 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  opacity: var(--grain-opacity); mix-blend-mode: var(--grain-blend);
-}
+html, body { margin: 0; }
+body { background: var(--face); color: var(--ink); font: 13px/1.4 "Helvetica Neue", Helvetica, Arial, sans-serif; }
+::selection { background: var(--dark); color: var(--white); }
+button, .seg, .check, .step, .cell, .wd, .calhead, .icon, .titlebar { user-select: none; }
 
-main { max-width: 500px; margin: 0 auto; padding: 22px 26px 40px; opacity: 0; transform: translateY(6px);
-       transition: opacity .5s ease, transform .5s cubic-bezier(.2, .7, .2, 1); }
-main.ready { opacity: 1; transform: none; }
+::-webkit-scrollbar { width: 18px; background: var(--dark); }
+::-webkit-scrollbar-thumb { background: var(--face); border: 1px solid; border-color: var(--hi) var(--lo) var(--lo) var(--hi);
+                            box-shadow: inset -1px -1px 0 var(--lo2); }
 
-/* ---------------------------------------------------------------- heading */
-.head { text-align: center; }
-.icon { width: 132px; aspect-ratio: 3 / 4; margin: 14px auto 10px; border-radius: 0; overflow: hidden; background: var(--paper-2);
-        transition: transform .4s cubic-bezier(.2, .7, .2, 1); }
-.icon:hover { transform: translateY(-2px); }
-.icon img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .6s ease; }
-.icon img.loaded { opacity: 1; }
-h1 { font: 600 30px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; margin: 16px 0 6px; letter-spacing: -.3px; }
-h1 b { color: var(--red); font-weight: 400; font-size: 1.2em; }
-.date { color: var(--ink-3); font-size: 14px; }
-.feast { color: var(--ink); font-size: 14.5px; margin-top: 2px; min-height: 1.4em; }
+.titlebar { position: sticky; top: 0; z-index: 5; height: 23px; background: var(--title); color: var(--title-ink);
+            display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
 
-/* ---------------------------------------------------------------- status */
-.status { margin: 22px 0 16px; padding: 16px 18px; border-radius: 0; background: var(--card); display: flex; align-items: center; gap: 14px; }
-.status .text { flex: 1; min-width: 0; }
-.status .big { font-size: 19px; font-weight: 500; letter-spacing: -.1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.status .small { color: var(--ink-3); font-size: 13px; }
-.bar { height: 3px; border-radius: 0; background: var(--track); margin-top: 9px; overflow: hidden; transition: opacity .3s ease; }
-.bar i { display: block; height: 100%; width: 0; background: var(--red); border-radius: 0; transition: width 1s linear; }
+main { max-width: 520px; margin: 0 auto; padding: 14px 16px 24px; }
 
-/* ---------------------------------------------------------------- buttons */
-.actions { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
-button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; -webkit-tap-highlight-color: transparent; }
-.btn { padding: 10px 12px; border-radius: 0; font-size: 14.5px; font-weight: 500;
-       background: var(--card); color: var(--ink);
-       transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .12s ease; }
-.btn:hover { background: var(--track); color: var(--red); }
-.btn:active { transform: scale(.97); }
-.btn.primary { background: var(--red);  color: var(--on-red); }
-.btn.primary:hover { background: var(--red-hover);  color: var(--on-red); }
-.btn.stop { width: 100%; display: none; }
+.bevel, button.b { background: var(--face); color: var(--ink); border: 1px solid; border-color: var(--hi) var(--lo) var(--lo) var(--hi);
+                   box-shadow: inset -1px -1px 0 var(--lo2); }
+button { font: inherit; cursor: pointer; }
+button.b { padding: 4px 12px; min-height: 24px; }
+button.b:active, button.b.on { background: var(--chosen); border-color: var(--lo) var(--hi) var(--hi) var(--lo); box-shadow: inset 1px 1px 0 var(--lo2); }
+button.b:focus-visible { outline: 1px dotted var(--ink); outline-offset: -4px; }
+button.b.default { font-weight: 700; }
+.well { background: var(--well); border: 1px solid; border-color: var(--lo2) var(--hi) var(--hi) var(--lo2); box-shadow: inset 1px 1px 0 var(--lo); }
+
+fieldset.box { border: 1px solid var(--lo2); box-shadow: 1px 1px 0 var(--hi), inset 1px 1px 0 var(--hi); margin: 14px 0 0; padding: 10px 12px 12px; }
+fieldset.box > legend { padding: 0 4px; font-weight: 700; }
+
+.head { display: grid; grid-template-columns: 112px 1fr; gap: 14px; align-items: center; }
+.icon { width: 112px; height: 142px; padding: 3px; }
+.icon img { width: 100%; height: 100%; object-fit: cover; display: block; }
+h1 { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+.date { color: var(--muted); }
+.feast { font-weight: 700; margin-top: 6px; }
+.fast { margin-top: 4px; }
+
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 28px; }
+.row + .row, .stack + .row, .stack + .stack { margin-top: 8px; }
+.stack > .label { display: block; margin-bottom: 4px; }
+.sub { color: var(--muted); font-size: 12px; }
+.status .big { font-size: 15px; font-weight: 700; }
+.bar { height: 10px; margin-top: 6px; padding: 1px; }
+.bar i { display: block; height: 100%; width: 0; background: var(--dark); }
+.actions { display: grid; grid-template-columns: 1fr 1fr 1.3fr; gap: 6px; margin-top: 12px; }
+.stop { display: none; width: 100%; margin-top: 12px; }
 .reading .actions { display: none; }
-.reading .btn.stop { display: block; }
-:focus-visible { outline: none; } button:focus-visible, [role=switch]:focus-visible { background-color: var(--red-soft); }
+.reading .stop { display: block; }
 
-/* ---------------------------------------------------------------- groups */
-h2 { font: 600 12px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; color: var(--ink-3); text-transform: uppercase; letter-spacing: 1px; margin: 26px 4px 8px; }
-.group { background: var(--card); border-radius: 0; overflow: hidden; }
-.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 14px; min-height: 50px;
-       transition: background-color .15s ease; }
-.row + .row { border-top: 0; }
-.row:hover { background: var(--red-soft); }
-.row label, .row .label { flex: 1; cursor: pointer; }
-.row .sub { display: block; color: var(--ink-3); font-size: 12.5px; }
-.row.stack { flex-direction: column; align-items: stretch; gap: 8px; }
+.seg { display: flex; }
+.seg button { flex: 1; padding: 3px 6px; min-height: 24px; white-space: nowrap; }
+.seg button + button { margin-left: -1px; }
 
-/* segmented control: the chosen one is filled, the highlight slides */
-.seg { position: relative; display: flex; padding: 3px; border-radius: 0; background: var(--track); isolation: isolate; }
-.seg button { position: relative; z-index: 1; flex: 1; padding: 6px 8px; border-radius: 0; font-size: 13.5px; font-weight: 500;
-              color: var(--ink-2); white-space: nowrap; transition: color .2s ease; }
-.seg button:hover { color: var(--ink); }
-.seg button.on { color: var(--on-red); }
-.seg .thumb { position: absolute; z-index: 0; top: 3px; bottom: 3px; left: 0; width: 0; border-radius: 0; background: var(--red); transition: transform .28s cubic-bezier(.3, .7, .2, 1), width .28s cubic-bezier(.3, .7, .2, 1); }
+.check { width: 16px; height: 16px; flex: none; cursor: pointer; display: grid; place-items: center; font-size: 13px; line-height: 1; font-weight: 700; }
+.check.on::after { content: "✓"; }
+label.l { flex: 1; cursor: pointer; }
 
-/* switch */
-.switch { position: relative; width: 46px; height: 28px; flex: none; border-radius: 0; background: var(--track);
-          transition: background-color .22s ease; }
-.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 0;
-                 background: var(--ink-3);
-                 transition: transform .26s cubic-bezier(.3, .7, .2, 1.15), width .15s ease; }
-.switch.on { background: var(--red); }
-.switch.on::after { transform: translateX(18px); background: var(--on-red); }
-.switch:active::after { width: 26px; }
-.switch.on:active::after { transform: translateX(14px); }
+.step { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.step button { width: 22px; height: 22px; padding: 0; font-size: 9px; }
+.step output { min-width: 70px; text-align: center; padding: 2px 6px; font-variant-numeric: tabular-nums; }
+.step.wide output { min-width: 180px; }
 
-/* stepper */
-.step { display: inline-flex; align-items: center; border-radius: 0; background: var(--track); padding: 2px; flex: none; }
-.step button { width: 30px; height: 30px; border-radius: 0; font-size: 18px; line-height: 1; color: var(--red);
-               transition: background-color .15s ease, transform .1s ease; }
-.step button:hover { background: var(--red-soft); }
-.step button:active { transform: scale(.9); }
-.step output { min-width: 64px; text-align: center; font-size: 14px; font-variant-numeric: tabular-nums; }
-.step.wide output { min-width: 190px; }
-.hear { color: var(--red); font-size: 13.5px; padding: 4px 8px; border-radius: 0; transition: background-color .15s ease; }
-.hear:hover { background: var(--red-soft); }
+.calhead { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.calhead span { flex: 1; text-align: center; font-weight: 700; font-size: 14px; }
+.calhead button.arrow { width: 24px; height: 22px; padding: 0; font-size: 9px; }
+.grid { display: grid; grid-template-columns: repeat(7, 1fr); padding: 2px; }
+.wd { text-align: center; font-size: 11px; color: var(--muted); padding: 3px 0; }
+.cell { height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; cursor: pointer;
+        position: relative; border: 1px solid transparent; }
+.cell b { font-weight: 400; font-variant-numeric: tabular-nums; }
+.cell small { font-size: 9px; color: var(--muted); line-height: 1; }
+.cell.today b { font-weight: 700; text-decoration: underline; }
+.cell.great b { font-weight: 700; }
+.cell .mk { position: absolute; top: 2px; right: 4px; font-size: 9px; }
+.cell.sel { background: var(--face); border-color: var(--lo) var(--hi) var(--hi) var(--lo); box-shadow: inset 1px 1px 0 var(--lo2); }
+.dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.dot.strict { background: var(--ink); }
+.dot.relaxed { border: 1px solid var(--ink); }
+.legend { display: flex; gap: 14px; justify-content: center; font-size: 11px; color: var(--muted); padding: 8px 0 0; }
+.legend span { display: inline-flex; align-items: center; gap: 4px; }
+.detail { margin-top: 10px; padding: 10px; }
+.detail .when { color: var(--muted); font-size: 12px; }
+.detail .title { font-weight: 700; font-size: 14px; margin: 2px 0 6px; }
+.detail ul { margin: 6px 0 0; padding-left: 18px; }
+.detail .refs { margin-top: 6px; }
+.detail .read { margin-top: 10px; }
+.ahead div:empty { display: none; }
+.ahead div + div { margin-top: 4px; }
 
-/* fast badge: strict = solid, relaxed = ring, none = quiet */
-.fast { display: inline-flex; align-items: center; gap: 7px; margin-top: 10px; padding: 4px 12px 4px 10px; border-radius: 0;
-        font-size: 13px; background: var(--red-soft); color: var(--red); opacity: 0; transition: opacity .4s ease; }
-.fast.shown { opacity: 1; }
-.fast.none { background: var(--track); color: var(--ink-2); }
-.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
-.dot.strict { background: var(--red); }
-.dot.relaxed { border: 1.6px solid var(--red); }
-.dot.none { background: var(--ink-3); opacity: .5; }
-
-/* calendar */
-.cal { padding: 12px 12px 4px; }
-.calhead { display: flex; align-items: center; justify-content: space-between; padding: 0 2px 8px; }
-.calhead span { font: 600 16px "Helvetica Neue", Helvetica, Arial, sans-serif; letter-spacing: .4px; }
-.calhead button { width: 32px; height: 32px; border-radius: 0; color: var(--red); font-size: 18px; transition: background-color .15s ease, transform .1s ease; }
-.calhead button:hover { background: var(--red-soft); }
-.calhead button:active { transform: scale(.9); }
-.grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; transition: opacity .2s ease; }
-.grid.fading { opacity: 0; }
-.wd { text-align: center; font-size: 11px; color: var(--ink-3); padding: 2px 0 6px; letter-spacing: .5px; }
-.cell { position: relative; height: 44px; border-radius: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-        gap: 3px; font-size: 14px; font-variant-numeric: tabular-nums; cursor: pointer; color: var(--ink);
-        transition: background-color .15s ease, transform .12s ease; }
-.cell:hover { background: var(--red-soft); }
-.cell:active { transform: scale(.94); }
-
-.cell.sel { background: var(--red); color: var(--on-red); }
-.cell.sel .dot.strict { background: var(--on-red); }
-.cell.sel .dot.relaxed { border-color: var(--on-red); }
-.cell.great b, .cell.vigil b { color: var(--red); }
-.cell.sel b { color: var(--on-red); }
-.cell .mk { position: absolute; top: 3px; right: 5px; font-size: 9px; color: var(--red); }
-.cell.sel .mk { color: var(--on-red); }
-.cell b { font-weight: 500; }
-.cell .dot { width: 6px; height: 6px; }
-.legend { display: flex; gap: 14px; justify-content: center; font-size: 11.5px; color: var(--ink-3); padding: 10px 0 8px; }
-.legend span { display: inline-flex; align-items: center; gap: 5px; }
-.detail { border-top: 0; margin: 4px -12px 0; padding: 14px 16px 16px; transition: opacity .25s ease; }
-.detail.fading { opacity: 0; }
-.detail .when { color: var(--ink-3); font-size: 12.5px; font-style: italic; }
-.detail .title { font-size: 16px; font-weight: 500; margin: 2px 0 8px; }
-.detail .fast { margin: 0 0 10px; opacity: 1; }
-.detail ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 13.5px; }
-.detail li { margin: 2px 0; }
-.detail .refs { margin-top: 8px; font-size: 13px; color: var(--ink-2); }
-.detail .refs b { color: var(--red); font-weight: 500; }
-
-button, .seg, .switch, .step, .cell, .wd, .calhead, .legend, .icon { user-select: none; }
-::selection { background: rgba(168, 38, 27, .22); color: inherit; }
-:root[data-theme="dark"] ::selection { background: rgba(208, 88, 74, .35); }
-
-/* two views: Today and Settings. One slides over the other; nothing else moves. */
-.views { position: relative; overflow: hidden; }
-.view { transition: transform .38s cubic-bezier(.3, .7, .2, 1), opacity .3s ease; }
-.view.settings { position: absolute; inset: 0 0 auto 0; transform: translateX(100%); opacity: 0; pointer-events: none; }
-body.in-settings .view.home { transform: translateX(-30%); opacity: 0; pointer-events: none; height: 0; overflow: hidden; }
-body.in-settings .view.settings { position: relative; transform: none; opacity: 1; pointer-events: auto; }
-.bar-top { display: flex; align-items: baseline; justify-content: space-between; margin: 4px 0 6px; }
-.bar-top h3 { font: 600 26px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; margin: 0; }
-.link { color: var(--red); font-size: 15px; padding: 6px 2px; transition: opacity .15s ease; }
-.link:hover { opacity: .7; }
-.more { display: block; margin: 26px auto 0; }
-
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
+.view.settings { display: none; }
+body.in-settings .view.home { display: none; }
+body.in-settings .view.settings { display: block; }
+.bar-top { display: flex; align-items: center; justify-content: space-between; }
+.bar-top h2 { margin: 0; font-size: 17px; }
+.more { margin-top: 14px; }
 </style>
 </head>
 <body>
-<main id="main"><div class="views"><section class="view home">
+<div class="titlebar">Reader</div>
+<main>
+
+<section class="view home">
   <div class="head">
-    <div class="icon"><img id="icon" alt=""></div>
-    <h1>Reader</h1>
-    <div class="date" id="date"></div>
-    <div class="feast" id="feast"></div>
-    <div class="fast" id="fast"><span class="dot"></span><span></span></div>
-  </div>
-
-  <div class="status">
-    <div class="text">
-      <div class="big" id="next">…</div>
-      <div class="small" id="sub"></div>
-      <div class="bar"><i id="bar"></i></div>
+    <div class="icon well"><img id="icon" alt="The Angel with the Golden Hair"></div>
+    <div>
+      <h1>Reader</h1>
+      <div class="date" id="date"></div>
+      <div class="feast" id="feast"></div>
+      <div class="fast" id="fast"></div>
     </div>
-    <div class="switch" id="enabled" role="switch" tabindex="0" title="Breaks"></div>
   </div>
 
-  <div class="actions">
-    <button class="btn primary" data-do="break">Break now</button>
-    <button class="btn" data-do="listen">Listen</button>
-    <button class="btn" data-do="today">Today</button>
-  </div>
-  <button class="btn stop" data-do="stop">Stop reading</button>
+  <fieldset class="box status"><legend>Breaks</legend>
+    <div class="row"><div class="big" id="next">…</div><div class="check bevel" id="enabled" role="switch" tabindex="0" title="Breaks on"></div></div>
+    <div class="sub" id="sub"></div>
+    <div class="bar well"><i id="bar"></i></div>
+    <div class="actions">
+      <button class="b default" data-do="break">Break Now</button>
+      <button class="b" data-do="listen">Listen</button>
+      <button class="b" data-do="today">Today's Readings</button>
+    </div>
+    <button class="b stop" data-do="stop">Stop Reading</button>
+  </fieldset>
 
-  <h2>Calendar</h2>
-  <div class="group cal">
-    <div class="calhead"><button id="prev" aria-label="Previous month">‹</button><span id="mname"></span><button id="nextm" aria-label="Next month">›</button></div>
-    <div class="grid" id="grid"></div>
-    <div class="legend"><span><i class="dot strict"></i>Strict fast</span><span><i class="dot relaxed"></i>Fish, wine or oil</span><span><span>✚</span>Great feast</span></div>
-    <div class="detail" id="detail"></div>
-  </div>
+  <fieldset class="box ahead"><legend>Ahead</legend>
+    <div id="ahead-now"></div>
+    <div id="ahead-feast"></div>
+    <div id="ahead-season"></div>
+  </fieldset>
 
-  <button class="link more" id="open-settings">Settings</button>
-  </section>
+  <fieldset class="box"><legend>Calendar</legend>
+    <div class="calhead">
+      <button class="b arrow" id="prev" aria-label="Previous month">◀</button>
+      <span id="mname"></span>
+      <button class="b arrow" id="nextm" aria-label="Next month">▶</button>
+      <button class="b" id="goto-today">Today</button>
+    </div>
+    <div class="grid well" id="grid"></div>
+    <div class="legend"><span><i class="dot strict"></i>Strict fast</span><span><i class="dot relaxed"></i>Fish, wine or oil</span><span>✚ Great feast</span></div>
+    <div class="detail well" id="detail"></div>
+  </fieldset>
 
-  <section class="view settings">
-  <div class="bar-top"><h3>Settings</h3><button class="link" id="close-settings">Done</button></div>
-  <h2>Break</h2>
-  <div class="group">
-    <div class="row stack"><span class="label">During a break</span>
-      <div class="seg" data-key="mode"><button data-v="lock">Lock screen</button><button data-v="listen">Audio only</button></div></div>
-    <div class="row stack"><span class="label">The screen shows</span>
-      <div class="seg" data-key="screen"><button data-v="icon">Icon</button><button data-v="text">Text</button><button data-v="black">Black</button></div></div>
-    <div class="row"><label>Text window in audio mode</label><div class="switch" data-key="read_along"></div></div>
-    <div class="row"><label>Emergency exit<span class="sub">Hold Ctrl + Alt + Shift + End</span></label><div class="switch" data-key="emergency_exit"></div></div>
-  </div>
+  <button class="b more" id="open-settings">Settings…</button>
+</section>
 
-  <h2>Reading</h2>
-  <div class="group">
-    <div class="row stack">
-      <div class="seg" data-key="content"><button data-v="mixed">Mixed</button><button data-v="saints">Saints</button><button data-v="scripture">Scripture</button><button data-v="psalter">Psalter</button></div></div>
-    <div class="row"><label>Prayers</label><div class="switch" data-key="prayers"></div></div>
-    <div class="row"><label>The Hour of the day</label><div class="switch" data-key="hours"></div></div>
-    <div class="row"><label>Morning prayers each new day</label><div class="switch" data-key="morning"></div></div>
-  </div>
+<section class="view settings">
+  <div class="bar-top"><h2>Settings</h2><button class="b default" id="close-settings">Done</button></div>
 
-  <h2>Voice</h2>
-  <div class="group">
-    <div class="row"><span class="step wide" data-key="voice" data-list="voices"><button>‹</button><output></output><button>›</button></span><button class="hear" data-do="hear">Hear</button></div>
-    <div class="row"><span class="label">Speed</span><span class="step" data-key="rate" data-min="-40" data-max="30" data-by="5" data-fmt="rate"><button>−</button><output></output><button>+</button></span></div>
-    <div class="row"><span class="label">Volume</span><span class="step" data-key="voice_volume" data-min="10" data-max="100" data-by="10" data-fmt="pct"><button>−</button><output></output><button>+</button></span></div>
-    <div class="row"><label>Birdsong</label><span class="step" data-key="ambience_volume" data-min="0" data-max="100" data-by="10" data-fmt="pct"><button>−</button><output></output><button>+</button></span><div class="switch" data-key="ambience"></div></div>
-  </div>
+  <fieldset class="box"><legend>Break</legend>
+    <div class="stack"><span class="label">During a break</span>
+      <div class="seg" data-key="mode"><button class="b" data-v="lock">Lock Screen</button><button class="b" data-v="listen">Audio Only</button></div></div>
+    <div class="stack"><span class="label">The screen shows</span>
+      <div class="seg" data-key="screen"><button class="b" data-v="icon">Icon</button><button class="b" data-v="text">Text</button><button class="b" data-v="black">Black</button></div></div>
+    <div class="row"><label class="l">Text window in audio mode</label><div class="check bevel" data-key="read_along"></div></div>
+    <div class="row"><label class="l">Emergency exit <span class="sub">(hold Ctrl+Alt+Shift+End)</span></label><div class="check bevel" data-key="emergency_exit"></div></div>
+  </fieldset>
 
-  <h2>Time</h2>
-  <div class="group">
-    <div class="row"><span class="label">Break every</span><span class="step" data-key="work_minutes" data-min="15" data-max="480" data-by="15" data-fmt="min"><button>−</button><output></output><button>+</button></span></div>
-    <div class="row"><span class="label">Break length</span><span class="step" data-key="break_minutes" data-min="1" data-max="60" data-by="1" data-fmt="min"><button>−</button><output></output><button>+</button></span></div>
-    <div class="row"><span class="label">New day after<span class="sub">hours away from the computer</span></span><span class="step" data-key="sleep_hours" data-min="2" data-max="14" data-by="1" data-fmt="h"><button>−</button><output></output><button>+</button></span></div>
-    <div class="row"><label>Start with Windows</label><div class="switch" data-key="autostart"></div></div>
-  </div>
+  <fieldset class="box"><legend>Reading</legend>
+    <div class="stack"><div class="seg" data-key="content"><button class="b" data-v="mixed">Mixed</button><button class="b" data-v="saints">Saints</button><button class="b" data-v="scripture">Scripture</button><button class="b" data-v="psalter">Psalter</button></div></div>
+    <div class="row"><label class="l">Prayers</label><div class="check bevel" data-key="prayers"></div></div>
+    <div class="row"><label class="l">The Hour of the day</label><div class="check bevel" data-key="hours"></div></div>
+    <div class="row"><label class="l">Morning prayers each new day</label><div class="check bevel" data-key="morning"></div></div>
+  </fieldset>
 
-  <h2>Appearance</h2>
-  <div class="group">
-    <div class="row stack"><div class="seg" data-key="theme"><button data-v="system">System</button><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
-  </div>
+  <fieldset class="box"><legend>Voice</legend>
+    <div class="row"><span class="step wide" data-key="voice" data-list="voices"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span><button class="b" data-do="hear">Hear</button></div>
+    <div class="row"><span>Speed</span><span class="step" data-key="rate" data-min="-40" data-max="30" data-by="5" data-fmt="rate"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
+    <div class="row"><span>Volume</span><span class="step" data-key="voice_volume" data-min="10" data-max="100" data-by="10" data-fmt="pct"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
+    <div class="row"><label class="l">Birdsong</label><span class="step" data-key="ambience_volume" data-min="0" data-max="100" data-by="10" data-fmt="pct"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span><div class="check bevel" data-key="ambience"></div></div>
+  </fieldset>
 
-  </section>
-</div></main>
+  <fieldset class="box"><legend>Time</legend>
+    <div class="row"><span>Break every</span><span class="step" data-key="work_minutes" data-min="15" data-max="480" data-by="15" data-fmt="min"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
+    <div class="row"><span>Break length</span><span class="step" data-key="break_minutes" data-min="1" data-max="60" data-by="1" data-fmt="min"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
+    <div class="row"><span>New day after <span class="sub">(hours away)</span></span><span class="step" data-key="sleep_hours" data-min="2" data-max="14" data-by="1" data-fmt="h"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
+    <div class="row"><label class="l">Start with Windows</label><div class="check bevel" data-key="autostart"></div></div>
+  </fieldset>
 
+  <fieldset class="box"><legend>Calendar</legend>
+    <div class="stack"><span class="label">Week starts on</span>
+      <div class="seg" data-key="week_start"><button class="b" data-v="sunday">Sunday</button><button class="b" data-v="monday">Monday</button></div></div>
+    <div class="row"><label class="l">Old-style dates in the calendar</label><div class="check bevel" data-key="old_dates"></div></div>
+    <div class="row"><label class="l">Note fast days in the morning</label><div class="check bevel" data-key="fast_reminder"></div></div>
+  </fieldset>
+
+  <fieldset class="box"><legend>Appearance</legend>
+    <div class="seg" data-key="theme"><button class="b" data-v="system">System</button><button class="b" data-v="light">Light</button><button class="b" data-v="dark">Dark</button></div>
+  </fieldset>
+</section>
+
+</main>
 <script>
 const TOKEN = new URLSearchParams(location.search).get("t");
 const $ = (q, el = document) => el.querySelector(q), $$ = (q, el = document) => [...el.querySelectorAll(q)];
 let cfg = {}, voices = [], pending = {};
+$("#favicon").href = `/favicon.png?t=${TOKEN}`;
 
-const FMT = {
-  pct: v => `${v}%`, min: v => `${v} min`, h: v => `${v} h`,
-  rate: v => v === 0 ? "Normal" : (v > 0 ? `+${v}%` : `${v}%`),
-};
+const FMT = { pct: v => `${v}%`, min: v => `${v} min`, h: v => `${v} h`, rate: v => v === 0 ? "Normal" : (v > 0 ? `+${v}%` : `${v}%`) };
 
 async function api(path, body) {
   const r = await fetch(path, { method: body ? "POST" : "GET", headers: { "X-Token": TOKEN, "Content-Type": "application/json" },
@@ -290,9 +232,9 @@ async function api(path, body) {
 function set(key, value) {
   cfg[key] = value; pending[key] = Date.now(); paint();
   api("/api/set", { key, value });
+  if ((key === "week_start" || key === "old_dates") && month) drawMonth();
 }
 
-// ---------------------------------------------------------------- theme
 const dark = matchMedia("(prefers-color-scheme: dark)");
 function applyTheme() {
   const t = cfg.theme || "system";
@@ -300,23 +242,13 @@ function applyTheme() {
 }
 dark.addEventListener("change", applyTheme);
 
-// ---------------------------------------------------------------- controls
-function placeThumb(seg) {
-  const on = $("button.on", seg), thumb = $(".thumb", seg);
-  if (!on || !thumb) return;
-  thumb.style.width = on.offsetWidth + "px";
-  thumb.style.transform = `translateX(${on.offsetLeft}px)`;
-}
-$$(".seg").forEach(seg => {
-  seg.insertAdjacentHTML("afterbegin", '<span class="thumb"></span>');
-  $$("button", seg).forEach(b => b.onclick = () => set(seg.dataset.key, b.dataset.v));
-});
-$$(".switch[data-key]").forEach(sw => {
-  sw.setAttribute("role", "switch"); sw.tabIndex = 0;
-  const flip = () => set(sw.dataset.key, !cfg[sw.dataset.key]);
-  sw.onclick = flip;
-  sw.onkeydown = e => (e.key === " " || e.key === "Enter") && (e.preventDefault(), flip());
-  const label = $("label", sw.closest(".row"));
+$$(".seg").forEach(seg => $$("button", seg).forEach(b => b.onclick = () => set(seg.dataset.key, b.dataset.v)));
+$$(".check[data-key]").forEach(box => {
+  box.setAttribute("role", "checkbox"); box.tabIndex = 0;
+  const flip = () => set(box.dataset.key, !cfg[box.dataset.key]);
+  box.onclick = flip;
+  box.onkeydown = e => (e.key === " " || e.key === "Enter") && (e.preventDefault(), flip());
+  const label = $("label", box.closest(".row"));
   if (label) label.onclick = flip;
 });
 $$(".step").forEach(st => {
@@ -326,10 +258,7 @@ $$(".step").forEach(st => {
     if (st.dataset.list === "voices") {
       const i = voices.findIndex(v => v[0] === cfg[key]);
       set(key, voices[(i + dir + voices.length) % voices.length][0]);
-    } else {
-      const v = Math.min(+st.dataset.max, Math.max(+st.dataset.min, (+cfg[key] || 0) + dir * +st.dataset.by));
-      set(key, v);
-    }
+    } else set(key, Math.min(+st.dataset.max, Math.max(+st.dataset.min, (+cfg[key] || 0) + dir * +st.dataset.by)));
   };
   less.onclick = () => move(-1); more.onclick = () => move(1);
 });
@@ -338,19 +267,72 @@ $$("[data-do]").forEach(b => b.onclick = () => api("/api/do", { action: b.datase
 
 function paint() {
   applyTheme();
-  $$(".seg").forEach(seg => {
-    $$("button", seg).forEach(b => b.classList.toggle("on", cfg[seg.dataset.key] === b.dataset.v));
-    placeThumb(seg);
-  });
-  $$(".switch[data-key]").forEach(sw => { sw.classList.toggle("on", !!cfg[sw.dataset.key]); sw.setAttribute("aria-checked", !!cfg[sw.dataset.key]); });
+  $$(".seg").forEach(seg => $$("button", seg).forEach(b => b.classList.toggle("on", cfg[seg.dataset.key] === b.dataset.v)));
+  $$(".check[data-key]").forEach(box => { box.classList.toggle("on", !!cfg[box.dataset.key]); box.setAttribute("aria-checked", !!cfg[box.dataset.key]); });
   $$(".step").forEach(st => {
     const v = cfg[st.dataset.key];
     $("output", st).textContent = st.dataset.list === "voices" ? ((voices.find(x => x[0] === v) || [, v])[1]) : FMT[st.dataset.fmt](v);
   });
 }
 
-// ---------------------------------------------------------------- state
-let iconDay = null;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let view = null, month = null, selected = null, todayIso = null;
+
+function showDetail(item) {
+  const box = $("#detail");
+  if (!item) { box.innerHTML = ""; return; }
+  const saints = (item.saints || []).slice(0, 8).map(s => `<li>${esc(s)}</li>`).join("");
+  const refs = (item.readings || []).map(esc).join(" · ");
+  box.innerHTML = `<div class="when">${esc(item.iso_label || "")} · ${esc(item.old)}, old style${item.tone ? " · Tone " + item.tone : ""}</div>
+    <div class="title">${esc(item.title)}</div>
+    <div>${esc(item.fast_text)}</div>
+    ${(item.feasts || []).length ? `<div class="refs"><b>Feast:</b> ${item.feasts.map(esc).join("; ")}</div>` : ""}
+    ${saints ? `<ul>${saints}</ul>` : ""}
+    ${refs ? `<div class="refs"><b>Readings:</b> ${refs}</div>` : ""}
+    <button class="b read" id="read-day">Read This Day</button>`;
+  $("#read-day").onclick = () => api("/api/do", { action: "day", day: item.iso }).then(() => setTimeout(refresh, 300));
+}
+function drawMonth() {
+  const data = month, grid = $("#grid");
+  const sunday = cfg.week_start === "sunday";
+  const names = sunday ? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const offset = sunday ? (data.first + 1) % 7 : data.first;
+  $("#mname").textContent = data.name;
+  grid.innerHTML = names.map(d => `<div class="wd">${d}</div>`).join("") + "<div></div>".repeat(offset) + data.days.map(d => {
+    const cls = ["cell", d.feast, d.iso === todayIso ? "today" : "", d.iso === selected ? "sel" : ""].join(" ");
+    const old = cfg.old_dates ? `<small>${esc(String(d.old).split(" ").pop())}</small>` : "";
+    return `<div class="${cls}" data-iso="${d.iso}" title="${esc(d.title)}"><b>${d.day}</b>${old}${d.feast === "great" ? '<span class="mk">✚</span>' : ""}${d.fast !== "none" ? `<i class="dot ${d.fast}"></i>` : ""}</div>`;
+  }).join("");
+  $$(".cell", grid).forEach(c => c.onclick = () => select(c.dataset.iso));
+}
+function showAhead(a) {
+  if (!a) return;
+  const when = x => x.days === 0 ? "today" : x.days === 1 ? "tomorrow" : `in ${x.days} days`;
+  $("#ahead-now").textContent = a.now ? `Now: ${a.now}` : "";
+  $("#ahead-feast").textContent = a.feast ? `Next great feast: ${a.feast.name}, ${when(a.feast)}` : "";
+  $("#ahead-season").textContent = a.season ? `Next fast: ${a.season.name}, ${when(a.season)}` : "";
+}
+async function loadMonth(y, m, pick) {
+  const data = await api(`/api/month?y=${y}&m=${m}`);
+  if (!data) return;
+  month = data; view = { y, m };
+  drawMonth();
+  showAhead(data.ahead);
+  if (pick) select(pick);
+}
+function select(iso) {
+  selected = iso;
+  $$(".cell").forEach(c => c.classList.toggle("sel", c.dataset.iso === iso));
+  const item = month && month.days.find(d => d.iso === iso);
+  if (item) item.iso_label = new Date(iso + "T12:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  showDetail(item);
+}
+const shift = n => { let { y, m } = view; m += n; if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; } loadMonth(y, m); };
+$("#prev").onclick = () => shift(-1);
+$("#nextm").onclick = () => shift(1);
+$("#goto-today").onclick = () => { const [y, m] = todayIso.split("-").map(Number); loadMonth(y, m, todayIso); };
+
+let iconSet = false;
 async function refresh() {
   const s = await api("/api/state");
   if (!s) return;
@@ -360,93 +342,26 @@ async function refresh() {
   const st = s.status;
   $("#date").textContent = st.date;
   $("#feast").textContent = st.feast;
+  $("#fast").textContent = st.today && st.today.fast_text ? st.today.fast_text : "";
   $("#next").textContent = st.headline;
   $("#sub").textContent = st.sub;
   $("#bar").style.width = (st.progress * 100).toFixed(1) + "%";
-  $(".bar").style.opacity = st.enabled && !st.reading ? 1 : 0;
+  $(".bar").style.visibility = st.enabled && !st.reading ? "visible" : "hidden";
   $("#enabled").classList.toggle("on", st.enabled);
   document.body.classList.toggle("reading", st.reading);
-  if (st.today && st.today.fast) fastBadge($("#fast"), st.today);
-  if (todayIso !== st.day) {  // first load, or the day turned
+  if (!iconSet) { iconSet = true; $("#icon").src = `/icon?t=${TOKEN}`; }
+  if (todayIso !== st.day) {
     todayIso = st.day;
     const [y, m] = st.day.split("-").map(Number);
     loadMonth(y, m, st.day);
   }
-  if (iconDay !== st.day) {
-    iconDay = st.day;
-    const img = $("#icon");
-    img.classList.remove("loaded");
-    img.onload = () => img.classList.add("loaded");
-    img.src = `/icon?t=${TOKEN}&d=${st.day}`;
-  }
 }
-// ---------------------------------------------------------------- calendar
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-let view = null, month = null, selected = null, todayIso = null;
-
-function fastBadge(el, item) {
-  el.className = "fast shown " + (item.fast || "none");
-  $(".dot", el).className = "dot " + (item.fast || "none");
-  el.lastElementChild.textContent = item.fast_text || "";
-}
-function showDetail(item, animate = true) {
-  const box = $("#detail");
-  const fill = () => {
-    if (!item) { box.innerHTML = ""; return; }
-    const saints = (item.saints || []).slice(0, 8).map(s => `<li>${esc(s)}</li>`).join("");
-    const refs = (item.readings || []).map(esc).join(" · ");
-    box.innerHTML = `<div class="when">${esc(item.iso_label || "")} · ${esc(item.old)}, old style${item.tone ? " · Tone " + item.tone : ""}</div>
-      <div class="title">${esc(item.title)}</div>
-      <div class="fast shown ${item.fast}"><span class="dot ${item.fast}"></span><span>${esc(item.fast_text)}</span></div>
-      ${(item.feasts || []).length ? `<div class="refs"><b>Feast</b> ${item.feasts.map(esc).join("; ")}</div>` : ""}
-      ${saints ? `<ul>${saints}</ul>` : ""}
-      ${refs ? `<div class="refs"><b>Readings</b> ${refs}</div>` : ""}`;
-    box.classList.remove("fading");
-  };
-  if (animate) { box.classList.add("fading"); setTimeout(fill, 160); } else fill();
-}
-async function loadMonth(y, m, pick) {
-  const grid = $("#grid");
-  grid.classList.add("fading");
-  const data = await api(`/api/month?y=${y}&m=${m}`);
-  if (!data) return;
-  month = data; view = { y, m };
-  $("#mname").textContent = data.name;
-  const heads = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => `<div class="wd">${d}</div>`).join("");
-  const blanks = "<div></div>".repeat(data.first);
-  grid.innerHTML = heads + blanks + data.days.map(d => {
-    const mk = d.feast === "great" ? "✚" : "";
-    const cls = ["cell", d.feast, d.iso === todayIso ? "today" : "", d.iso === selected ? "sel" : ""].join(" ");
-    return `<div class="${cls}" data-iso="${d.iso}" title="${esc(d.title)}"><b>${d.day}</b>${mk ? `<span class="mk">${mk}</span>` : ""}${d.fast !== "none" ? `<i class="dot ${d.fast}"></i>` : ""}</div>`;
-  }).join("");
-  $$(".cell", grid).forEach(c => c.onclick = () => select(c.dataset.iso));
-  requestAnimationFrame(() => grid.classList.remove("fading"));
-  if (pick) select(pick, false);
-}
-function select(iso, animate = true) {
-  selected = iso;
-  $$(".cell").forEach(c => c.classList.toggle("sel", c.dataset.iso === iso));
-  const item = month && month.days.find(d => d.iso === iso);
-  if (item) {
-    const d = new Date(iso + "T12:00");
-    item.iso_label = d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-  }
-  showDetail(item, animate);
-}
-const shift = n => { let { y, m } = view; m += n; if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; } loadMonth(y, m); };
-$("#prev").onclick = () => shift(-1);
-$("#nextm").onclick = () => shift(1);
-
-$("#open-settings").onclick = () => { document.body.classList.add("in-settings"); scrollTo({ top: 0, behavior: "smooth" });
-                                      requestAnimationFrame(() => $$(".seg").forEach(placeThumb)); };
-$("#close-settings").onclick = () => { document.body.classList.remove("in-settings"); scrollTo({ top: 0, behavior: "smooth" }); };
+$("#open-settings").onclick = () => { document.body.classList.add("in-settings"); scrollTo(0, 0); };
+$("#close-settings").onclick = () => { document.body.classList.remove("in-settings"); scrollTo(0, 0); };
 addEventListener("keydown", e => e.key === "Escape" && document.body.classList.remove("in-settings"));
 if (location.hash === "#settings") document.body.classList.add("in-settings");
-
-const firstLoad = refresh().then(() => requestAnimationFrame(() => $("#main").classList.add("ready")));
+refresh();
 setInterval(refresh, 1000);
-addEventListener("resize", () => $$(".seg").forEach(placeThumb));
-document.fonts.ready.then(() => $$(".seg").forEach(placeThumb));
 </script>
 </body>
 </html>
