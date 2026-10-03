@@ -38,7 +38,6 @@ body {
   font: 400 15.5px/1.5 "Literata", Georgia, serif;
   font-optical-sizing: auto;
   -webkit-font-smoothing: antialiased;
-  user-select: none;
   transition: background-color .3s ease, color .3s ease;
 }
 /* The matte finish: fine paper grain over everything, never in the way. */
@@ -177,13 +176,27 @@ h2 { font: 400 15px/1 "Ponomar", "Literata", serif; color: var(--red); letter-sp
 .detail .refs { margin-top: 8px; font-size: 13px; color: var(--ink-2); }
 .detail .refs b { color: var(--red); font-weight: 500; }
 
-footer { text-align: center; color: var(--ink-3); font-size: 12px; font-style: italic; margin-top: 28px; }
+button, .seg, .switch, .step, .cell, .wd, .calhead, .legend, .icon { user-select: none; }
+::selection { background: rgba(168, 38, 27, .22); color: inherit; }
+:root[data-theme="dark"] ::selection { background: rgba(208, 88, 74, .35); }
+
+/* two views: Today and Settings. One slides over the other; nothing else moves. */
+.views { position: relative; overflow: hidden; }
+.view { transition: transform .38s cubic-bezier(.3, .7, .2, 1), opacity .3s ease; }
+.view.settings { position: absolute; inset: 0 0 auto 0; transform: translateX(100%); opacity: 0; pointer-events: none; }
+body.in-settings .view.home { transform: translateX(-30%); opacity: 0; pointer-events: none; height: 0; overflow: hidden; }
+body.in-settings .view.settings { position: relative; transform: none; opacity: 1; pointer-events: auto; }
+.bar-top { display: flex; align-items: baseline; justify-content: space-between; margin: 4px 0 6px; }
+.bar-top h3 { font: 400 26px/1 "Ponomar", "Literata", serif; margin: 0; }
+.link { color: var(--red); font-size: 15px; padding: 6px 2px; transition: opacity .15s ease; }
+.link:hover { opacity: .7; }
+.more { display: block; margin: 26px auto 0; }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }
 </style>
 </head>
 <body>
-<main id="main">
+<main id="main"><div class="views"><section class="view home">
   <div class="head">
     <svg class="headpiece" viewBox="0 0 500 22" preserveAspectRatio="none" aria-hidden="true">
       <g stroke="currentColor" stroke-width="1"><line x1="0" y1="8" x2="222" y2="8"/><line x1="0" y1="14" x2="222" y2="14"/>
@@ -223,6 +236,11 @@ footer { text-align: center; color: var(--ink-3); font-size: 12px; font-style: i
     <div class="detail" id="detail"></div>
   </div>
 
+  <button class="link more" id="open-settings">Settings</button>
+  </section>
+
+  <section class="view settings">
+  <div class="bar-top"><h3>Settings</h3><button class="link" id="close-settings">Done</button></div>
   <h2>Break</h2>
   <div class="group">
     <div class="row stack"><span class="label">During a break</span>
@@ -263,8 +281,8 @@ footer { text-align: center; color: var(--ink-3); font-size: 12px; font-style: i
     <div class="row stack"><div class="seg" data-key="theme"><button data-v="system">System</button><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
   </div>
 
-  <footer>Through the prayers of our holy fathers, Lord Jesus Christ our God, have mercy on us.</footer>
-</main>
+  </section>
+</div></main>
 
 <script>
 const TOKEN = new URLSearchParams(location.search).get("t");
@@ -430,6 +448,12 @@ function select(iso, animate = true) {
 const shift = n => { let { y, m } = view; m += n; if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; } loadMonth(y, m); };
 $("#prev").onclick = () => shift(-1);
 $("#nextm").onclick = () => shift(1);
+
+$("#open-settings").onclick = () => { document.body.classList.add("in-settings"); scrollTo({ top: 0, behavior: "smooth" });
+                                      requestAnimationFrame(() => $$(".seg").forEach(placeThumb)); };
+$("#close-settings").onclick = () => { document.body.classList.remove("in-settings"); scrollTo({ top: 0, behavior: "smooth" }); };
+addEventListener("keydown", e => e.key === "Escape" && document.body.classList.remove("in-settings"));
+if (location.hash === "#settings") document.body.classList.add("in-settings");
 
 const firstLoad = refresh().then(() => requestAnimationFrame(() => $("#main").classList.add("ready")));
 setInterval(refresh, 1000);
