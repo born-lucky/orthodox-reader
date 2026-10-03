@@ -9,6 +9,7 @@ being played, so you can read along.
 from __future__ import annotations
 
 import asyncio
+import logging
 import itertools
 import re
 import tempfile
@@ -60,6 +61,7 @@ class Voice:
         self.rate = int(cfg["rate"])
         self.online = self.voice != "sapi"
         self.room = cfg.get("room", True)
+        self.volume = max(0.0, min(1.0, cfg.get("voice_volume", 70) / 100))
 
     def make(self, text: str) -> str:
         n = next(_files)
@@ -83,8 +85,9 @@ class Voice:
         try:
             from . import room
 
-            return room.place(path)
+            return room.place(path, self.volume)
         except Exception:
+            logging.getLogger("reader").exception("room: could not place the voice; playing it dry")
             return path
 
 

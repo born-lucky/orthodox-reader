@@ -31,9 +31,9 @@ from . import settings
 RATE = 22050
 SECONDS = 75
 FADE = 3.0
-PATH = settings.HOME / "ambience-v3.wav"
+FOLDER = settings.HOME
 TAU = 2 * math.pi
-TARGET_RMS = 10 ** (-31 / 20)  # the garden's loudness, before the volume setting
+TARGET_RMS = 10 ** (-31 / 20)  # the garden's loudness at volume 100
 HEAD = 0.00066                  # seconds: the largest interaural time difference
 
 
@@ -161,11 +161,16 @@ def render(seed: int = 7) -> np.ndarray:
     return np.tanh(mix / 0.5) * 0.5  # soft ceiling: no chirp ever stabs
 
 
-def ensure() -> str:
-    """The ambience file, rendering it the first time (a few seconds)."""
-    if PATH.is_file():
-        return str(PATH)
-    mix = render()
+def ensure(volume: int = 30) -> str:
+    """The ambience file at a volume (0-100), rendering it the first time (a few seconds).
+    The level is in the file itself, so it plays at full scale and the balance against
+    the voice is exact: at 30 it sits about 12 dB under the voice at 70."""
+    volume = max(0, min(100, int(round(volume / 5) * 5)))
+    path = FOLDER / f"ambience-v4-{volume:03d}.wav"
+    if path.is_file():
+        return str(path)
+    mix = render() * (volume / 100)
+    PATH = path
     tmp = PATH.with_suffix(".tmp")
     with wave.open(str(tmp), "wb") as out:
         out.setnchannels(2)
@@ -173,6 +178,7 @@ def ensure() -> str:
         out.setframerate(RATE)
         out.writeframes((mix * 32767).astype(np.int16).tobytes())
     tmp.replace(PATH)
-    for old in settings.HOME.glob("ambience-v[12].wav"):
-        old.unlink(missing_ok=True)
+    for old in FOLDER.glob("ambience-v*.wav"):
+        if old != PATH:
+            old.unlink(missing_ok=True)
     return str(PATH)

@@ -166,8 +166,9 @@ def _convolve(x: np.ndarray, ir: np.ndarray) -> np.ndarray:
                     axis=1).astype(np.float32)
 
 
-def place(src: str) -> str:
-    """Send one spoken chunk through the room to the two ears; returns a new stereo WAV."""
+def place(src: str, volume: float = 1.0) -> str:
+    """Send one spoken chunk through the room to the two ears; returns a new stereo WAV.
+    `volume` (0-1) is applied here, in the file, so playback can stay at full scale."""
     path = Path(src)
     voice = _decode(path)
     if not len(voice):
@@ -175,7 +176,7 @@ def place(src: str) -> str:
     voice = voice - _lowpass(voice, 90.0)  # no close-microphone boom
     out = _convolve(voice, brir())
     rms = float(np.sqrt(np.mean(out[: len(voice)] ** 2))) or 1.0
-    out *= TARGET_RMS / rms
+    out *= TARGET_RMS / rms * volume
     out = np.tanh(out / CEILING) * CEILING
     out = out[: len(voice) + int(RATE * 1.2)]  # the room rings on into the pause
     fade = int(RATE * 0.6)

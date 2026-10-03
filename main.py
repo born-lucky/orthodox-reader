@@ -22,6 +22,15 @@ def single_instance() -> bool:
 def main() -> None:
     logging.basicConfig(filename=settings.LOG, level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    if "--check-audio" in sys.argv:  # the whole voice path, inside the built exe; result in reader.log
+        from reader import speech
+
+        path = speech.Voice(settings.load()).make("Glory to Thee, our God, glory to Thee.")
+        logging.getLogger("reader").info("check-audio: %s (%s)", path, "in the room" if path.endswith("-room.wav") else "DRY")
+        from reader import ambience
+
+        logging.getLogger("reader").info("check-audio: birdsong %s", ambience.ensure(settings.load()["ambience_volume"]))
+        return
     if not single_instance():
         return
     try:

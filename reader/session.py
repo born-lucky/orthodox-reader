@@ -52,9 +52,9 @@ class Session(threading.Thread):
             self.end = start + self.seconds
             if self.cfg["ambience"]:
                 try:
-                    amb = audio.Sound(ambience.ensure(), 0)
+                    amb = audio.Sound(ambience.ensure(self.cfg["ambience_volume"]), 0)
                     amb.play(loop=True)
-                    threading.Thread(target=audio.fade, args=(amb, 0, self.cfg["ambience_volume"], 4.0, self.stopped_fn),
+                    threading.Thread(target=audio.fade, args=(amb, 0, 100, 4.0, self.stopped_fn),
                                      daemon=True).start()
                 except OSError:
                     amb = None
@@ -72,7 +72,7 @@ class Session(threading.Thread):
             reason = "stopped"
         finally:
             if amb is not None:
-                audio.fade(amb, self.cfg["ambience_volume"], 0, 3.0)
+                audio.fade(amb, 100, 0, 3.0)
                 amb.close()
             if self._sound is not None:
                 self._sound.close()
@@ -149,7 +149,8 @@ class Session(threading.Thread):
     def _speak(self, text: str, path: str, limit: float) -> None:
         self.post("caption", text)
         try:
-            sound = audio.Sound(path, self.cfg["voice_volume"])
+            # The room files carry their own level; a dry fallback uses the player's volume.
+            sound = audio.Sound(path, 100 if path.endswith("-room.wav") else self.cfg["voice_volume"])
         except OSError:
             return
         self._sound = sound
