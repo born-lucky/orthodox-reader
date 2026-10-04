@@ -60,9 +60,11 @@ class Tracker:
         last = st.get("last_seen")
         absence = seen - last if last else None
         if absence is None or absence >= cfg["sleep_hours"] * 3600 or not st.get("day"):
+            first_run = absence is None
             st["day"] = dt.date.fromtimestamp(now).isoformat()
             self._restart_cycle()
-            events.append("new_day")
+            # The very first start is not a morning: no prayers a minute after installing.
+            events.append("first_day" if first_run else "new_day")
         elif absence >= cfg["away_minutes"] * 60:
             self._restart_cycle()
             events.append("rested")

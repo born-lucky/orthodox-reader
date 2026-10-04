@@ -17,8 +17,8 @@ def run(tracker, start, seconds, idle=0.0, step=5):
     return events, t
 
 
-def test_first_run_is_a_new_day():
-    assert "new_day" in Tracker({}).tick(T0, 0, CFG)
+def test_first_run_is_a_day_but_not_a_morning():
+    assert Tracker({}).tick(T0, 0, CFG) == ["first_day"]
 
 
 def test_two_hours_of_use_brings_a_warning_then_a_break():

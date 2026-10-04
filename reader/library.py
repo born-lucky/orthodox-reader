@@ -105,7 +105,9 @@ def strip_html(text: str) -> str:
     return "\n".join(line.strip() for line in text.splitlines() if line.strip())
 
 
-FEAST_MARKS = {6: "great", 5: "vigil", 4: "polyeleos", 3: "doxology", 2: "six"}
+# orthocal's feast ranks: 8 a Great Feast of the Lord, 7 of the Theotokos (the Twelve),
+# 6 a great feast by the Typikon (the Protection, the Beheading...), 5 vigil, 4 polyeleos...
+FEAST_MARKS = {8: "great", 7: "great", 6: "great", 5: "vigil", 4: "polyeleos", 3: "doxology", 2: "six"}
 
 
 def fast_of(data: dict) -> tuple[str, str]:

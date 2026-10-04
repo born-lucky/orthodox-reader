@@ -352,8 +352,9 @@ async function refresh() {
   if (!iconSet) { iconSet = true; $("#icon").src = `/icon?t=${TOKEN}`; }
   if (todayIso !== st.day) {
     todayIso = st.day;
-    const [y, m] = st.day.split("-").map(Number);
-    loadMonth(y, m, st.day);
+    const want = location.hash.match(/ym=(\d{4})-(\d{2})/);  // e.g. #ym=2027-01 opens that month
+    const [y, m] = want ? [+want[1], +want[2]] : st.day.split("-").map(Number);
+    loadMonth(y, m, want ? null : st.day);
   }
 }
 $("#open-settings").onclick = () => { document.body.classList.add("in-settings"); scrollTo(0, 0); };

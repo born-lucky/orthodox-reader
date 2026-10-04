@@ -281,6 +281,9 @@ class App:
 
     def _on(self, event: str) -> None:
         log.info("event %s", event)
+        if event == "first_day":  # just installed: learn today, but no morning session yet
+            threading.Thread(target=self._fetch_today, daemon=True).start()
+            return
         if event == "new_day" and self.cfg.get("fast_reminder", True):
             self.root.after(8000, self._fast_note)
         if event == "new_day":
