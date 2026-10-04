@@ -1,6 +1,7 @@
 """Logic tests (no windows, no sound): python -m pytest tests"""
 
 import datetime as dt
+from datetime import date as datetime_date
 
 from reader import library, speech
 from reader.activity import Tracker
@@ -104,3 +105,43 @@ def test_bundled_bible_and_prayers():
     lib = library.Library()
     assert len(lib.kjv) == 66 and lib.kjv["Psalms"][50][0].startswith("Have mercy upon me")
     assert lib.chapter("Psalms", 51).title == "Psalm 51 (50 in the Septuagint)"
+
+
+def test_waking_up_after_six_hours():
+    """Six hours or more away (asleep, the PC off or sleeping) is a new morning; less is a rest."""
+    cfg = dict(CFG, sleep_hours=6)
+    tr = Tracker({})
+    _, t = run(tr, T0, 600)
+    assert tr.tick(t + 5.9 * 3600, 0, cfg) == ["rested"]
+    _, t = run(tr, t + 5.9 * 3600, 60)
+    assert "new_day" in tr.tick(t + 6 * 3600 + 1, 0, cfg)
+
+
+def test_waking_up_is_measured_across_restarts():
+    """The last input is saved, so logging on in the morning (the app freshly started by
+    Windows) still sees the night: a new Tracker on yesterday's state wakes up."""
+    cfg = dict(CFG, sleep_hours=6)
+    state = {}
+    tr = Tracker(state)
+    _, t = run(tr, T0, 600)
+    morning = Tracker(dict(state))  # what the app loads at logon
+    assert "new_day" in morning.tick(t + 8 * 3600, 0, cfg)
+
+
+def test_morning_is_the_days_readings_and_lives():
+    lib = library.Library()
+    cfg = {"prayers": True, "content": "saints", "hours": False, "morning_prayers": False}
+    segments, closing = lib.plan("morning", cfg, 30, civil=datetime_date(2026, 10, 14))
+    kinds = [s.kind for s in segments]
+    assert kinds[0] == "prayer" and kinds.count("prayer") == 1          # a short beginning only
+    assert "scripture" in kinds and "life" in kinds and closing is not None
+    assert segments[-1].kind == "life"                                   # nothing padded on after
+
+
+def test_breaks_are_lives_of_the_saints_by_default():
+    from reader import settings
+    assert settings.DEFAULTS["content"] == "saints" and settings.DEFAULTS["hours"] is False
+    assert settings.DEFAULTS["sleep_hours"] == 6 and settings.DEFAULTS["autostart"] is True
+    lib = library.Library()
+    segments, _ = lib.plan("break", dict(settings.DEFAULTS), 15)
+    assert all(s.kind in ("prayer", "life") for s in segments)

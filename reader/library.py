@@ -550,7 +550,8 @@ class Library:
 
     KINDS = {
         # content setting -> (kind, weight): the variety a break draws from, at random
-        "saints": [("prologue", 5), ("homily", 2), ("theophan", 2), ("chrysostom", 1), ("life", 2)],
+        "saints": [("prologue", 6), ("life", 3)],
+        "fathers": [("homily", 2), ("theophan", 2), ("chrysostom", 1)],
         "scripture": [("lectionary", 4), ("gospel", 4), ("apostle", 3), ("prophets", 3), ("psalm", 3), ("wisdom", 1)],
     }
 
@@ -566,7 +567,10 @@ class Library:
                 out.append(seg)
                 left -= speaking_time(seg) + GAP
             return out
-        kinds = self.KINDS["saints"] + self.KINDS["scripture"] if want == "mixed" else self.KINDS.get(want, self.KINDS["saints"])
+        if want == "mixed":
+            kinds = self.KINDS["saints"] + self.KINDS["fathers"] + self.KINDS["scripture"]
+        else:
+            kinds = self.KINDS.get(want, self.KINDS["saints"])
         bag = [k for k, weight in kinds for _ in range(weight)]
         out: list[Segment] = []
         last = None
@@ -613,17 +617,14 @@ class Library:
         civil = civil or dt.date.today()
         office = self.hour(hour_for(now), now.weekday()) if cfg.get("hours") and kind == "break" else []
         if cfg["prayers"]:
-            if kind == "morning" and self.prayers.get("morning_full"):
+            if kind == "morning" and cfg.get("morning_prayers") and self.prayers.get("morning_full"):
                 segments += self.sequence("morning_full")
-                segments.append(self.prayer("work"))
-            elif kind == "morning":
-                segments += [self.prayer("opening"), self.prayer("morning"), self.prayer("work")]
             elif office:
                 segments += office  # the Hour opens with its own prayers
-            elif (now.hour >= 21 or now.hour < 4) and self.prayers.get("evening_full"):
+            elif kind == "break" and cfg.get("hours") and (now.hour >= 21 or now.hour < 4) and self.prayers.get("evening_full"):
                 segments += self.sequence("evening_full")
             else:
-                segments.append(self.prayer("opening"))
+                segments.append(self.prayer("opening"))  # a short beginning, then the readings
         elif office:
             segments += office
         if kind == "text":  # chosen in the window: read just that
@@ -650,6 +651,8 @@ class Library:
             segments += [Segment("life", w["title"], [f"From the Prologue of Ohrid: {w['title']}."] + w["text"]) for w in today]
             if not today and data:
                 segments += self.lives(data)
+            # The morning is the day itself, read through: nothing added, nothing cut.
+            return segments, (self.prayer("closing") if cfg["prayers"] else None)
         closing = self.prayer("closing") if cfg["prayers"] else None
         used = sum(speaking_time(seg) + GAP for seg in segments) + (speaking_time(closing) if closing else 0)
         segments += self.works_for(cfg, minutes * 60 - used - 30)

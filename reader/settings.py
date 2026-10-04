@@ -21,15 +21,16 @@ DEFAULTS = {
     "enabled": True,
     "work_minutes": 120,       # active use before a break
     "break_minutes": 15,
-    "sleep_hours": 5,          # an absence this long is a night's sleep: a new day begins
+    "sleep_hours": 6,          # away this long (asleep, PC off) = waking up: the morning readings
     "away_minutes": 15,        # an absence this long already counts as a break
     "mode": "lock",            # "lock": take over the screen | "listen": audio while you work
     "screen": "icon",          # lock mode: "icon" | "text" | "black"
     "read_along": True,        # listen mode: a small caption window to read along
-    "content": "mixed",        # "mixed" | "saints" | "scripture" | "gospels" | "psalter" (the last two in order)
-    "hours": True,             # open each break with the Hour of the day (needs your Horologion texts)
+    "content": "saints",       # breaks: "saints" (lives) | "mixed" | "scripture" | "gospels" | "psalter"
+    "hours": False,            # open each break with the Hour of the day (needs a Horologion); off by default
     "prayers": True,
-    "morning": True,           # a session with the day's readings when a new day begins
+    "morning": True,           # when you wake: all the day's Scripture and lives of the saints, in one session
+    "morning_prayers": False,  # and the full morning prayers before them (needs a prayer book)
     "morning_minutes": 30,     # the morning prayers and the day's readings take longer than a break
     "ambience": True,
     "ambience_volume": 30,     # 0-100: about 12 dB under the voice at the default voice volume

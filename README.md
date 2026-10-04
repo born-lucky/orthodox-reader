@@ -1,6 +1,6 @@
 # ☦ Reader
 
-A quiet Orthodox companion for Windows. Every two hours of work it takes a fifteen-minute break with you: it prays, reads the lives of the saints and Holy Scripture aloud over soft birdsong, and shows an icon. When a new day begins (it notices you slept) it reads the morning prayers and the day's readings from the old calendar.
+A quiet Orthodox companion for Windows, for people who don't have time to sit down and read. It starts with Windows. When you wake up (six hours or more away from the computer), it reads you the day by the old calendar: the appointed Scripture and the lives of that day's saints, together in one session. Through the day, every two hours of work, it takes a fifteen-minute break and reads lives of the saints over soft birdsong. No streaks, no scores, nothing to keep up with.
 
 - **Read it yourself, or hear it.** The **Bible** button opens the whole Bible in Orthodox order: the Gospels (KJV), Acts and the Epistles, the Psalter (your Septuagint Psalter if you have one), the Old Testament with Tobit, Judith, Wisdom, Sirach and Baruch (Brenton). Read any chapter, or press **Read Aloud**. During a reading, **Show Text** shows the whole text with the sentence being spoken marked, and what comes next.
 - **Never the same twice.** Readings are dealt from shuffled decks, not drawn at random: nothing is read again until everything of its kind has been read, and the decks are kept between days. Or choose **Gospels** or **Psalter** to read straight through, continuing where you left off.

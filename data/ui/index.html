@@ -209,10 +209,11 @@ body[data-view="settings"] .view.settings, body[data-view="bible"] .view.bible, 
   </fieldset>
 
   <fieldset class="box"><legend>Reading</legend>
-    <div class="stack"><div class="seg" data-key="content"><button class="b" data-v="mixed">Mixed</button><button class="b" data-v="saints">Saints</button><button class="b" data-v="scripture">Scripture</button><button class="b" data-v="gospels">Gospels</button><button class="b" data-v="psalter">Psalter</button></div></div>
+    <div class="stack"><div class="seg" data-key="content"><button class="b" data-v="saints">Saints</button><button class="b" data-v="mixed">Mixed</button><button class="b" data-v="scripture">Scripture</button><button class="b" data-v="gospels">Gospels</button><button class="b" data-v="psalter">Psalter</button></div></div>
     <div class="row"><label class="l">Prayers</label><div class="check bevel" data-key="prayers"></div></div>
-    <div class="row"><label class="l">The Hour of the day</label><div class="check bevel" data-key="hours"></div></div>
-    <div class="row"><label class="l">Morning prayers each new day</label><div class="check bevel" data-key="morning"></div></div>
+    <div class="row"><label class="l">The Hour of the day <span class="sub">(Horologion)</span></label><div class="check bevel" data-key="hours"></div></div>
+    <div class="row"><label class="l">When you wake: the day's Scripture and saints</label><div class="check bevel" data-key="morning"></div></div>
+    <div class="row"><label class="l">Full morning prayers first</label><div class="check bevel" data-key="morning_prayers"></div></div>
   </fieldset>
 
   <fieldset class="box"><legend>Voice</legend>
@@ -225,7 +226,7 @@ body[data-view="settings"] .view.settings, body[data-view="bible"] .view.bible, 
   <fieldset class="box"><legend>Time</legend>
     <div class="row"><span>Break every</span><span class="step" data-key="work_minutes" data-min="15" data-max="480" data-by="15" data-fmt="min"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
     <div class="row"><span>Break length</span><span class="step" data-key="break_minutes" data-min="1" data-max="60" data-by="1" data-fmt="min"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
-    <div class="row"><span>New day after <span class="sub">(hours away)</span></span><span class="step" data-key="sleep_hours" data-min="2" data-max="14" data-by="1" data-fmt="h"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
+    <div class="row"><span>Waking up after <span class="sub">(hours away)</span></span><span class="step" data-key="sleep_hours" data-min="2" data-max="14" data-by="1" data-fmt="h"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
     <div class="row"><label class="l">Start with Windows</label><div class="check bevel" data-key="autostart"></div></div>
   </fieldset>
 

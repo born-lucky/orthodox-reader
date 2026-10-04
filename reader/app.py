@@ -362,6 +362,10 @@ class App:
             self.notice.close()
             self.notice = None
         minutes = self.cfg["morning_minutes"] if kind in ("morning", "day") else self.cfg["break_minutes"]
+        if kind in ("morning", "day"):  # all of the day's readings, however long they take
+            planned, closing = self.library.plan(kind, self.cfg, minutes, civil=civil or dt.date.today())
+            spoken = sum(lib.speaking_time(s) + lib.GAP for s in planned) + (lib.speaking_time(closing) if closing else 0)
+            minutes = max(5.0, spoken / 60 + 3)
         end = time.monotonic() + minutes * 60
         if mode == "lock":
             hint = "Hold Ctrl+Alt+Shift+End for 3 seconds to end early" if self.cfg["emergency_exit"] else ""
