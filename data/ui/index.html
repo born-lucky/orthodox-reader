@@ -111,21 +111,7 @@ label.l { flex: 1; cursor: pointer; }
 .detail ul { margin: 6px 0 0; padding-left: 18px; }
 .detail .refs { margin-top: 6px; }
 .detail .read { margin-top: 10px; }
-/* the clock to the next reading: an inset black display, like a game's counter */
-.timer { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
-.clock { background: #000; color: #f2f2f2; font: 700 30px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums;
-         padding: 8px 12px; min-width: 132px; text-align: center; letter-spacing: 1px;
-         border: 1px solid; border-color: var(--lo2) var(--hi) var(--hi) var(--lo2); box-shadow: inset 1px 1px 0 #000; }
-.paused .clock { color: #777; }
-.tlabel .big { font-size: 14px; }
-/* twelve blocks of ten minutes: they fill as you work; the one filling now blinks */
-.segs { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; padding: 3px; margin-top: 10px; }
-.segs i { height: 12px; background: transparent; border: 1px solid var(--lo2); }
-.segs i.full { background: var(--dark); border-color: var(--lo); }
-.segs i.now { animation: blink 1.6s steps(2, start) infinite; background: var(--dark); border-color: var(--lo); }
-@keyframes blink { 50% { background: transparent; } }
-.paused .segs { opacity: .45; }
-.onrow { margin-top: 10px; }
+.onlabel { color: var(--muted); font-size: 12px; margin-left: auto; cursor: pointer; }
 /* what is ahead: kind, name, date, and how many days */
 .arow:empty { display: none; }
 .arow { display: grid; grid-template-columns: 92px 1fr auto; gap: 10px; align-items: center; }
@@ -152,7 +138,7 @@ select.b { padding: 3px 6px; min-height: 26px; flex: 1; font: inherit; }
 .stoprow { display: none; gap: 6px; margin-top: 12px; }
 .reading .stoprow { display: flex; }
 .stoprow .b { flex: 1; }
-@media (prefers-reduced-motion: reduce) { .segs i.now { animation: none; } }
+
 
 .view.settings, .view.bible, .view.now { display: none; }
 body[data-view] .view.home { display: none; }
@@ -179,12 +165,9 @@ body[data-view="settings"] .view.settings, body[data-view="bible"] .view.bible, 
   </div>
 
   <fieldset class="box status"><legend>Breaks</legend>
-    <div class="timer">
-      <div class="clock" id="clock">0:00:00</div>
-      <div class="tlabel"><div class="big" id="next">…</div><div class="sub" id="sub"></div></div>
-    </div>
-    <div class="segs well" id="segs"></div>
-    <div class="row onrow"><label class="l" for="enabled">Breaks on</label><div class="check bevel" id="enabled" role="switch" tabindex="0"></div></div>
+    <div class="row"><div class="big" id="next">…</div><label class="onlabel" for="enabled">Breaks on</label><div class="check bevel" id="enabled" role="switch" tabindex="0"></div></div>
+    <div class="sub" id="sub"></div>
+    <div class="bar well"><i id="bar"></i></div>
     <div class="actions">
       <button class="b default" data-do="break">Break Now</button>
       <button class="b" data-do="listen">Listen</button>
@@ -374,25 +357,7 @@ function showAhead(a) {
   $("#ahead-season").innerHTML = row("Fast", a.season);
 }
 
-// the clock: synced each second from the app, counting down smoothly in between
-let clock = { secs: 0, at: 0, running: false, active: 0, work: 7200 };
-$("#segs").innerHTML = "<i></i>".repeat(12);
-function hms(t) {
-  t = Math.max(0, Math.round(t));
-  const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60;
-  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-function tick() {
-  const passed = clock.running ? (performance.now() - clock.at) / 1000 : 0;
-  $("#clock").textContent = clock.paused ? "--:--" : hms(clock.secs - passed);
-  const share = clock.reading ? 0 : Math.min(1, (clock.active + passed) / clock.work);
-  const filled = share * 12;
-  $$("#segs i").forEach((b, i) => {
-    b.classList.toggle("full", i < Math.floor(filled));
-    b.classList.toggle("now", !clock.paused && !clock.reading && i === Math.floor(filled) && filled < 12);
-  });
-}
-setInterval(tick, 250);
+
 async function loadMonth(y, m, pick) {
   const data = await api(`/api/month?y=${y}&m=${m}`);
   if (!data) return;
@@ -425,11 +390,9 @@ async function refresh() {
   $("#feast").textContent = st.feast;
   $("#fast").textContent = st.today && st.today.fast_text ? st.today.fast_text : "";
   $("#sub").textContent = st.sub;
-  clock = { secs: st.reading ? st.left : st.until, at: performance.now(), running: st.reading || st.enabled,
-            paused: !st.enabled && !st.reading, reading: st.reading, active: st.active, work: st.work };
-  $(".status").classList.toggle("paused", clock.paused);
-  $("#next").textContent = st.reading ? st.headline : (st.enabled ? "until the next reading" : "Breaks are paused");
-  tick();
+  $("#next").textContent = st.headline;
+  $("#bar").style.width = (st.progress * 100).toFixed(1) + "%";
+  $(".bar").style.visibility = st.enabled && !st.reading ? "visible" : "hidden";
   $("#enabled").classList.toggle("on", st.enabled);
   document.body.classList.toggle("reading", st.reading);
   showNow(st.now);
