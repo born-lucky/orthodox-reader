@@ -73,7 +73,7 @@ class App:
         root.withdraw()
         self._icon = ImageTk.PhotoImage(angel_image(64))
         root.iconphoto(True, self._icon)
-        self.web = webui.Server(self.web_state, self.web_call, self.today_icon, self.web_month)
+        self.web = webui.Server(self.web_state, self.web_call, self.today_icon, self.web_month, self.web_bible)
         if not start_hidden:
             self.web.open_window()
         threading.Thread(target=self.library.prefetch, args=(self._stop,), name="reader-prefetch", daemon=True).start()
@@ -113,8 +113,25 @@ class App:
                 "headline": headline, "sub": sub,
                 "progress": 0 if reading else min(1.0, self.tracker.state.get("active", 0) / work),
                 "enabled": self.cfg["enabled"], "reading": reading,
+                # the clock: seconds to the next reading, or seconds left in this one
+                "until": self.tracker.until_break(self.cfg),
+                "left": max(0.0, self.session.end - time.monotonic()) if reading and hasattr(self.session, "end") else 0.0,
+                "active": self.tracker.state.get("active", 0), "work": work,
+                "now": ({"title": self.session.current.title if self.session.current else "",
+                         "lines": self.session.current.lines if self.session.current else [],
+                         "caption": self.session.caption,
+                         "next": self.session.upcoming[0] if self.session.upcoming else ""} if reading else None),
             },
         }
+
+    def web_bible(self, book: str | None, chapter: int | None):
+        """The Bible for the window: the books, or one chapter's verses."""
+        if not book:
+            return {"books": self.library.bible_books()}
+        seg = self.library.bible_segment(book, chapter or 1)
+        if seg is None:
+            return {"title": "", "verses": []}
+        return {"title": seg.title, "verses": seg.lines[1:]}
 
     def web_month(self, year: int, month: int) -> dict:
         days = self.library.civil_month(year, month)
@@ -159,7 +176,10 @@ class App:
         if kind == "set" and payload.get("key") in settings.DEFAULTS:
             self.events.put(("set", (payload["key"], payload.get("value"))))
         elif kind == "do":
-            self.events.put(("do", payload.get("action") if not payload.get("day") else ("day", payload["day"])))
+            if payload.get("action") == "text":
+                self.events.put(("do", ("text", str(payload.get("book", "")), int(payload.get("chapter") or 0))))
+            else:
+                self.events.put(("do", payload.get("action") if not payload.get("day") else ("day", payload["day"])))
 
     def _set(self, key: str, value) -> None:
         kind = type(settings.DEFAULTS[key])
@@ -177,6 +197,11 @@ class App:
                 log.exception("autostart")
 
     def _do(self, action) -> None:
+        if isinstance(action, tuple) and action[0] == "text":  # Read Aloud from the Bible view
+            seg = self.library.bible_segment(action[1], action[2])
+            if seg is not None:
+                self.start("text", "listen", items=[seg])
+            return
         if isinstance(action, tuple) and action[0] == "day":  # read a chosen calendar day
             try:
                 self.start("day", "listen", civil=dt.date.fromisoformat(action[1]))
@@ -241,6 +266,8 @@ class App:
                     self.screen.set_title(value)
                 elif kind == "caption" and self.screen:
                     self.screen.set_caption(value)
+                elif kind == "next" and self.screen and hasattr(self.screen, "set_next"):
+                    self.screen.set_next(value)
                 elif kind == "end":
                     self._ended(value)
                 elif kind == "show":
@@ -328,7 +355,7 @@ class App:
 
     # ------------------------------------------------------------ sessions
 
-    def start(self, kind: str, mode: str, civil: dt.date | None = None) -> None:
+    def start(self, kind: str, mode: str, civil: dt.date | None = None, items: list | None = None) -> None:
         if self.session is not None:
             return
         if self.notice is not None:
@@ -345,7 +372,9 @@ class App:
             self.lock.start()
         elif self.cfg["read_along"]:
             self.screen = overlay.ReadAlong(self.root, end, self.stop_session)
-        self.session = Session(kind, self.cfg, self.library, self._post, minutes, civil=civil)
+        if kind == "text":  # as long as the chapter takes (a long psalm runs past a break)
+            minutes = max(5.0, sum(lib.speaking_time(s) for s in items or []) / 60 + 2)
+        self.session = Session(kind, self.cfg, self.library, self._post, minutes, civil=civil, items=items)
         self.session.start()
 
     def _post(self, kind: str, value: str) -> None:

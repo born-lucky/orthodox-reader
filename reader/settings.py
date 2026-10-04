@@ -26,7 +26,7 @@ DEFAULTS = {
     "mode": "lock",            # "lock": take over the screen | "listen": audio while you work
     "screen": "icon",          # lock mode: "icon" | "text" | "black"
     "read_along": True,        # listen mode: a small caption window to read along
-    "content": "mixed",        # "mixed" | "saints" | "scripture" | "psalter" (kathismata in order)
+    "content": "mixed",        # "mixed" | "saints" | "scripture" | "gospels" | "psalter" (the last two in order)
     "hours": True,             # open each break with the Hour of the day (needs your Horologion texts)
     "prayers": True,
     "morning": True,           # a session with the day's readings when a new day begins

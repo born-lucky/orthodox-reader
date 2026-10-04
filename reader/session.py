@@ -25,7 +25,7 @@ GAP_SEGMENT = 1.6
 
 class Session(threading.Thread):
     def __init__(self, kind: str, cfg: dict, library: Library, post, minutes: float | None = None,
-                 civil=None) -> None:
+                 civil=None, items=None) -> None:
         super().__init__(name="reader-session", daemon=True)
         self.kind = kind
         self.cfg = dict(cfg)
@@ -33,6 +33,10 @@ class Session(threading.Thread):
         self.post = post
         self.seconds = (minutes if minutes is not None else cfg["break_minutes"]) * 60
         self.civil = civil  # kind "day": the calendar day to read
+        self.items = items  # kind "text": exactly these
+        self.current: Segment | None = None   # what is being read, for the window
+        self.caption = ""
+        self.upcoming: list[str] = []         # the titles still to come
         self._stop = threading.Event()
         self._sound: audio.Sound | None = None
         self._ringing: list = []  # sentences whose room echo is still sounding
@@ -63,7 +67,8 @@ class Session(threading.Thread):
                 except OSError:
                     amb = None
             self.post("title", "Preparing the readings…")
-            segments, closing = self.library.plan(self.kind, self.cfg, self.seconds / 60, civil=self.civil)
+            segments, closing = self.library.plan(self.kind, self.cfg, self.seconds / 60, civil=self.civil, items=self.items)
+            self.upcoming = [s.title for s in segments] + ([closing.title] if closing else [])
             voice = speech.Voice(self.cfg)
             closing_files = [(c, voice.make(c)) for line in (closing.lines if closing else []) for c in speech.chunks(line)]
             self._read(segments, voice)
@@ -136,7 +141,11 @@ class Session(threading.Thread):
                     if current is not None:
                         self._wait(GAP_SEGMENT)
                     current = segment
+                    self.current = segment
+                    if segment.title in self.upcoming:
+                        self.upcoming = self.upcoming[self.upcoming.index(segment.title) + 1:]
                     self.post("title", segment.title)
+                    self.post("next", self.upcoming[0] if self.upcoming else "")
                 self._speak(text, path, self.end)
                 self._wait(GAP_CHUNK)
         finally:
@@ -145,6 +154,9 @@ class Session(threading.Thread):
     def _play_segment(self, segment: Segment, files: list[tuple[str, str]], limit: float) -> None:
         self._wait(GAP_SEGMENT)
         self.post("title", segment.title)
+        self.current = segment
+        self.upcoming = []
+        self.post("next", "")
         for text, path in files:
             if self.stopped or time.monotonic() > limit:
                 return
@@ -152,6 +164,7 @@ class Session(threading.Thread):
             self._wait(GAP_CHUNK)
 
     def _speak(self, text: str, path: str, limit: float) -> None:
+        self.caption = text
         self.post("caption", text)
         try:
             # The room files carry their own level; a dry fallback uses the player's volume.

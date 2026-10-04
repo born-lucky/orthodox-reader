@@ -21,7 +21,7 @@ import threading
 import urllib.request
 from dataclasses import dataclass, field
 
-from . import settings
+from . import deck, settings
 
 API = "https://orthocal.info/api/julian/{y}/{m}/{d}/"
 DAYS = settings.HOME / "orthocal"
@@ -172,6 +172,21 @@ def book_phrase(book: str) -> str:
     return f"the Book of {book}"
 
 
+BIBLE_ORDER = [
+    ("The Gospels", ["Matthew", "Mark", "Luke", "John"]),
+    ("Acts and the Epistles", ["Acts", "James", "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude", "Romans",
+                               "1 Corinthians", "2 Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians",
+                               "1 Thessalonians", "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon",
+                               "Hebrews", "Revelation"]),
+    ("The Psalter and Wisdom", ["Psalms", "Job", "Proverbs", "Ecclesiastes", "Song of Solomon", "Wisdom of Solomon", "Sirach"]),
+    ("The Law and the Histories", ["Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth",
+                                   "1 Samuel", "2 Samuel", "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra",
+                                   "Nehemiah", "Tobit", "Judith", "Esther"]),
+    ("The Prophets", ["Hosea", "Amos", "Micah", "Joel", "Obadiah", "Jonah", "Nahum", "Habakkuk", "Zephaniah", "Haggai",
+                      "Zechariah", "Malachi", "Isaiah", "Jeremiah", "Baruch", "Lamentations", "Ezekiel", "Daniel"]),
+]
+MONTHS = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September",
+          "October", "November", "December"]
 CHARS_PER_SECOND = 13.0  # the neural voice at a calm pace
 GAP = 2.5                # silence between works
 
@@ -240,10 +255,7 @@ class Library:
 
     def kathisma(self) -> list[Segment]:
         """The next kathisma of the Psalter, in order; the place is kept between breaks."""
-        state = settings.load_state()
-        n = int(state.get("kathisma", 0)) % len(KATHISMATA)
-        state["kathisma"] = n + 1
-        settings.save_state(state)
+        n = deck.position("kathisma") % len(KATHISMATA)
         first, last = KATHISMATA[n]
         out = [Segment("prayer", f"Kathisma {n + 1}", [f"Kathisma {n + 1} of the Psalter."])]
         for num in range(first, last + 1):
@@ -372,21 +384,35 @@ class Library:
                 out.append(Segment("life", title, cut([title + "."] + text.splitlines())))
         return out
 
-    def random_life(self) -> Segment | None:
-        """A life from any day already on disk; fetch one random day if none are."""
-        files = list(DAYS.glob("*.json"))
-        self.rng.shuffle(files)
-        for path in files[:40]:
-            try:
-                lives = self.lives(json.loads(path.read_text(encoding="utf-8")))
-            except ValueError:
-                continue
-            if lives:
-                return self.rng.choice(lives)
-        start = dt.date(dt.date.today().year, 1, 1)
-        data = self.day(start + dt.timedelta(days=self.rng.randrange(365)))
-        lives = self.lives(data) if data else []
-        return self.rng.choice(lives) if lives else None
+    def _days_index(self) -> dict:
+        """The old-calendar days on disk (re-read when more have been fetched)."""
+        files = sorted(DAYS.glob("*.json"))
+        if getattr(self, "_index_count", -1) != len(files):
+            index = {}
+            for path in files:
+                try:
+                    index[path.stem] = json.loads(path.read_text(encoding="utf-8"))
+                except ValueError:
+                    continue
+            self._index, self._index_count = index, len(files)
+        return self._index
+
+    def random_life(self, fits=None) -> Segment | None:
+        """The next life of a saint from the days on disk, never one already read."""
+        index = self._days_index()
+        cards = [f"{stem}:{i}" for stem, data in index.items() for i in range(len(data.get("stories") or []))]
+
+        def make(card):
+            stem, i = card.rsplit(":", 1)
+            lives = self.lives({"stories": [index[stem]["stories"][int(i)]]})
+            return lives[0] if lives else None
+
+        def ok(card):
+            seg = make(card)
+            return seg is not None and (fits is None or fits(seg))
+
+        card = deck.deal("lives", cards, self.rng, fits=ok)
+        return make(card) if card else None
 
     def prefetch(self, stop: threading.Event, pause: float = 20.0) -> None:
         """Slowly fetch the rest of the year so the lives work offline (one day per pause)."""
@@ -406,35 +432,85 @@ class Library:
 
     # ------------------------------------------------------------ works
 
-    def work(self, kind: str) -> Segment | None:
-        """One whole work of a kind, or None if there is none to be had."""
+    def work(self, kind: str, fits=None) -> Segment | None:
+        """The next whole work of a kind, dealt from that kind's deck (never a repeat
+        until all have been read), passing over any for which fits(segment) is false."""
         mine = self.works
-        pick = self.rng.choice
+
+        def from_list(name, items, make):
+            cards = [str(i) for i in range(len(items))]
+            card = deck.deal(name, cards, self.rng, fits=lambda c: fits is None or fits(make(items[int(c)])))
+            return make(items[int(card)]) if card is not None else None
+
+        def piece(kind_, w, prefix=""):
+            return Segment(kind_, w["title"], [prefix + w["title"] + "."] + w["text"])
+
         if kind == "prologue" and mine.get("prologue_lives"):
-            w = pick(mine["prologue_lives"])
-            return Segment("life", w["title"], [f"From the Prologue of Ohrid: {w['title']}."] + w["text"])
+            return from_list("prologue", mine["prologue_lives"], lambda w: piece("life", w, "From the Prologue of Ohrid: "))
         if kind == "homily" and (mine.get("prologue_homilies") or mine.get("prologue_reflections")):
-            w = pick((mine.get("prologue_homilies") or []) + (mine.get("prologue_reflections") or []))
-            return Segment("homily", w["title"], [w["title"] + "."] + w["text"])
+            items = (mine.get("prologue_homilies") or []) + (mine.get("prologue_reflections") or [])
+            def homily(w):  # many share a title: name each by its day in the Prologue
+                seg = piece("homily", w)
+                m, d = (w.get("when") or "0/0").split("/")
+                if m != "0":
+                    seg.title = f"{w['title']} ({MONTHS[int(m)]} {d})"
+                return seg
+            return from_list("homily", items, homily)
         if kind == "theophan" and mine.get("theophan"):
-            w = pick(mine["theophan"])
-            return Segment("homily", w["title"], [w["title"] + "."] + w["text"])
+            return from_list("theophan", mine["theophan"], lambda w: piece("homily", w))
         if kind == "chrysostom" and mine.get("chrysostom"):
-            w = pick(mine["chrysostom"])
-            return Segment("homily", w["title"], [w["title"] + "."] + w["text"])
+            return from_list("chrysostom", mine["chrysostom"], lambda w: piece("homily", w))
         if kind == "life":
-            return self.random_life()
+            return self.random_life(fits)
         if kind in ("gospel", "apostle", "prophets"):
-            return self.pericope(pick(self.pericopes[kind]))
+            return from_list(kind, self.pericopes[kind], self.pericope)
         if kind == "lectionary":
-            return self.lectionary()
+            return self.lectionary(fits)
         if kind == "wisdom":
-            book = pick(["Wisdom of Solomon"] * 5 + ["Sirach"] * 4 + ["Tobit", "Baruch"])
-            return self.lxx_chapter(book, self.rng.randint(1, len(self.lxx[book])))
+            chapters = [(b, n) for b in ("Wisdom of Solomon", "Sirach", "Tobit", "Baruch") for n in range(1, len(self.lxx[b]) + 1)]
+            return from_list("wisdom", chapters, lambda bn: self.lxx_chapter(*bn))
         if kind == "psalm":
-            kjv = pick(self.pericopes["psalms"])
-            return self.psalter_psalm(str(lxx(kjv))) if self.psalter and str(lxx(kjv)) in self.psalter else self.chapter("Psalms", kjv)
+            def psalm(kjv):
+                n = str(lxx(kjv))
+                return self.psalter_psalm(n) if self.psalter and n in self.psalter else self.chapter("Psalms", kjv)
+            return from_list("psalm", self.pericopes["psalms"], psalm)
         return None
+
+    def bible_books(self) -> list[dict]:
+        """The books, in the order of the Orthodox Bible (with the Septuagint's Tobit,
+        Judith, Wisdom, Sirach and Baruch), and the Psalter of your choice."""
+        out = []
+        for group, books in BIBLE_ORDER:
+            for book in books:
+                if book == "Psalms" and self.psalter:
+                    out.append({"name": "Psalms", "group": group, "chapters": len(self.psalter), "lxx": True})
+                elif book in self.lxx:
+                    out.append({"name": book, "group": group, "chapters": len(self.lxx[book])})
+                elif book in self.kjv:
+                    out.append({"name": book, "group": group, "chapters": len(self.kjv[book])})
+        return out
+
+    def bible_segment(self, book: str, n: int) -> Segment | None:
+        """One chapter of any book, to read or to hear."""
+        if book == "Psalms" and self.psalter:
+            return self.psalter_psalm(str(n)) if str(n) in self.psalter else None
+        if book in self.lxx and 1 <= n <= len(self.lxx[book]):
+            seg = self.lxx_chapter(book, n)
+            seg.lines = [seg.lines[0]] + self.lxx[book][n - 1]  # the whole chapter, uncut
+            return seg
+        if book in self.kjv and 1 <= n <= len(self.kjv[book]):
+            seg = self.chapter(book, n)
+            seg.lines = [f"From {book_phrase(book)}, chapter {n}."] + self.kjv[book][n - 1]
+            return seg
+        return None
+
+    def next_gospel_chapter(self) -> Segment:
+        """The Gospels read through in order, Matthew 1 to John 21, kept between breaks."""
+        chapters = [(b, n) for b in ("Matthew", "Mark", "Luke", "John") for n in range(1, len(self.kjv[b]) + 1)]
+        book, n = chapters[deck.position("gospels") % len(chapters)]
+        seg = self.chapter(book, n)
+        seg.lines[0] = f"From the Holy Gospel according to Saint {book}, chapter {n}."
+        return seg
 
     def pericope(self, item: list) -> Segment:
         """One of the great passages, read whole: [title, book, chapter, first, last]."""
@@ -444,26 +520,29 @@ class Library:
         ref = f"{book} {chapter}:{first}" + (f"-{last}" if last else "")
         return Segment("scripture", f"{title} ({ref})", [f"From {book_phrase(book)}. {title}."] + verses)
 
-    def lectionary(self) -> Segment | None:
-        """A Gospel or Epistle the Church appoints for some day of the year (from the
-        old-calendar days on disk), with the day it belongs to."""
-        files = list(DAYS.glob("*.json"))
-        self.rng.shuffle(files)
-        for path in files[:30]:
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-            except ValueError:
-                continue
-            readings = [r for r in data.get("readings") or [] if r.get("source") in ("Gospel", "Epistle") and r.get("passage")]
-            if not readings:
-                continue
-            r = self.rng.choice(readings)
+    def lectionary(self, fits=None) -> Segment | None:
+        """A Gospel or Epistle the Church appoints for some day of the year, with the day
+        it belongs to; dealt from a deck, so none comes again until all have been read."""
+        index = self._days_index()
+        by_ref = {}
+        for stem, data in index.items():
+            for i, r in enumerate(data.get("readings") or []):
+                if r.get("source") in ("Gospel", "Epistle") and r.get("passage"):
+                    by_ref.setdefault(r.get("display") or f"{stem}:{i}", f"{stem}:{i}")  # a reading on two days is one card
+        cards = list(by_ref.values())
+
+        def make(card):
+            stem, i = card.rsplit(":", 1)
+            data = index[stem]
+            r = data["readings"][int(i)]
             day = (data.get("titles") or [data.get("summary_title") or ""])[0]
             kind = "Gospel" if r["source"] == "Gospel" else "Epistle"
             verses = [strip_html(v.get("content", "")) for v in r["passage"]]
             head = f"The {kind} for {day}: {r.get('display', '')}." if day else f"The {kind}: {r.get('display', '')}."
             return Segment("scripture", f"The {kind} · {r.get('display', '')}", cut([head] + verses, SEGMENT_CHARS * 2))
-        return None
+
+        card = deck.deal("lectionary", cards, self.rng, fits=lambda c: fits is None or fits(make(c)))
+        return make(card) if card else None
 
     def lxx_chapter(self, book: str, number: int) -> Segment:
         title = f"{book}, chapter {number}"
@@ -480,6 +559,13 @@ class Library:
         want = cfg["content"]
         if want == "psalter":
             return self.kathisma()
+        if want == "gospels":  # the Gospels in order, as many chapters as fit
+            out, left = [], seconds
+            while left > 60:
+                seg = self.next_gospel_chapter()
+                out.append(seg)
+                left -= speaking_time(seg) + GAP
+            return out
         kinds = self.KINDS["saints"] + self.KINDS["scripture"] if want == "mixed" else self.KINDS.get(want, self.KINDS["saints"])
         bag = [k for k, weight in kinds for _ in range(weight)]
         out: list[Segment] = []
@@ -491,7 +577,8 @@ class Library:
             kind = self.rng.choice(bag)
             if kind == last and len(set(bag)) > 1:
                 continue
-            item = self.work(kind)
+            room = left
+            item = self.work(kind, fits=lambda seg, room=room: bool(seg.lines) and speaking_time(seg) <= room)
             if item is None or not item.lines or item.title in seen or speaking_time(item) > left:
                 misses += 1
                 continue
@@ -512,7 +599,8 @@ class Library:
 
     # ------------------------------------------------------------ a whole session
 
-    def plan(self, kind: str, cfg: dict, minutes: float, civil: dt.date | None = None) -> tuple[list[Segment], Segment | None]:
+    def plan(self, kind: str, cfg: dict, minutes: float, civil: dt.date | None = None,
+             items: list | None = None) -> tuple[list[Segment], Segment | None]:
         """What a session reads, in order, and the closing prayer it ends with.
 
         The opening prayers (or the Hour of the day), then whole works of different
@@ -538,6 +626,8 @@ class Library:
                 segments.append(self.prayer("opening"))
         elif office:
             segments += office
+        if kind == "text":  # chosen in the window: read just that
+            return list(items or []), None
         if kind == "day":  # a day chosen in the calendar: its Scripture and its saints, nothing else
             data = self.day(civil)
             segments = [self.prayer("opening")] if cfg["prayers"] else []

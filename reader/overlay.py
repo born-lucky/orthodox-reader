@@ -177,7 +177,7 @@ class ReadAlong:
         win.attributes("-topmost", True)
         win.attributes("-alpha", 0.93)
         win.configure(bg=t.PAGE)
-        w, h = 470, 190
+        w, h = 470, 210
         _, _, right, bottom = work_area()
         win.geometry(f"{w}x{h}+{right - w - 18}+{bottom - h - 18}")
         frame = tk.Frame(win, bg=t.PAGE, highlightbackground=t.GOLD, highlightthickness=1)
@@ -193,7 +193,9 @@ class ReadAlong:
         stop.bind("<Button-1>", lambda e: on_stop())
         self.caption = tk.Label(frame, text="", fg=t.INK, bg=t.PAGE, font=(SERIF, 12), wraplength=w - 30,
                                 justify="left", anchor="nw")
-        self.caption.pack(fill="both", expand=True, padx=14, pady=(6, 10))
+        self.caption.pack(fill="both", expand=True, padx=14, pady=(6, 0))
+        self.next = tk.Label(frame, text="", fg=t.FADED, bg=t.PAGE, font=(SERIF, 9), anchor="w")
+        self.next.pack(fill="x", padx=14, pady=(2, 8))
         for widget in (frame, self.title, self.caption, top):
             widget.bind("<ButtonPress-1>", self._grab)
             widget.bind("<B1-Motion>", self._drag)
@@ -219,6 +221,9 @@ class ReadAlong:
 
     def set_hint(self, text: str) -> None:
         pass
+
+    def set_next(self, text: str) -> None:
+        self.next.configure(text=f"Next: {text}" if text else "")
 
     def close(self) -> None:
         self.win.destroy()

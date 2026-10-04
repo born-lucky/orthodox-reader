@@ -374,7 +374,8 @@ def works_from_bot(bot: str, chrysostom_count: int = 240) -> dict:
             homilies.append({"title": "A Homily from the Prologue", "text": _paragraphs(day["homily"]), "when": when})
         if day.get("reflection"):
             reflections.append({"title": "A Reflection from the Prologue", "text": _paragraphs(day["reflection"]), "when": when})
-    theophan = [{"title": f"St. Theophan the Recluse: {t['title']}", "text": _paragraphs(t["body"])}
+    theophan = [{"title": f"St. Theophan the Recluse: {t['title']}" + (f" ({t['citation'].strip()})" if t.get("citation") else ""),
+                 "text": _paragraphs(t["body"])}
                 for t in json.loads((root / "cache/theophan.json").read_text(encoding="utf-8"))["thoughts"]]
     chrysostom = []
     try:

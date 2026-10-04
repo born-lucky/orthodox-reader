@@ -111,12 +111,52 @@ label.l { flex: 1; cursor: pointer; }
 .detail ul { margin: 6px 0 0; padding-left: 18px; }
 .detail .refs { margin-top: 6px; }
 .detail .read { margin-top: 10px; }
-.ahead div:empty { display: none; }
-.ahead div + div { margin-top: 4px; }
+/* the clock to the next reading: an inset black display, like a game's counter */
+.timer { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+.clock { background: #000; color: #f2f2f2; font: 700 30px/1 "Helvetica Neue", Helvetica, Arial, sans-serif; font-variant-numeric: tabular-nums;
+         padding: 8px 12px; min-width: 132px; text-align: center; letter-spacing: 1px;
+         border: 1px solid; border-color: var(--lo2) var(--hi) var(--hi) var(--lo2); box-shadow: inset 1px 1px 0 #000; }
+.paused .clock { color: #777; }
+.tlabel .big { font-size: 14px; }
+/* twelve blocks of ten minutes: they fill as you work; the one filling now blinks */
+.segs { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; padding: 3px; margin-top: 10px; }
+.segs i { height: 12px; background: transparent; border: 1px solid var(--lo2); }
+.segs i.full { background: var(--dark); border-color: var(--lo); }
+.segs i.now { animation: blink 1.6s steps(2, start) infinite; background: var(--dark); border-color: var(--lo); }
+@keyframes blink { 50% { background: transparent; } }
+.paused .segs { opacity: .45; }
+.onrow { margin-top: 10px; }
+/* what is ahead: kind, name, date, and how many days */
+.arow:empty { display: none; }
+.arow { display: grid; grid-template-columns: 92px 1fr auto; gap: 10px; align-items: center; }
+.arow + .arow { margin-top: 6px; }
+.arow .kind { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+.arow .name { font-weight: 700; }
+.arow .name small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; }
+.arow .days { padding: 2px 8px; text-align: center; min-width: 64px; font-variant-numeric: tabular-nums; }
+/* the cog */
+.head { position: relative; }
+.corner { position: absolute; top: 0; right: 0; display: flex; gap: 6px; }
+.cog { width: 28px; height: 28px; padding: 0; font-size: 16px; line-height: 1; }
+.corner .b { min-height: 28px; }
+/* reading: the text itself, to read with your own eyes */
+.text { padding: 14px 16px; margin-top: 12px; font-size: 15px; line-height: 1.65; }
+.text p { margin: 0 0 8px; }
+.text sup { color: var(--muted); font-size: 10px; margin-right: 3px; }
+.text .here { background: var(--face); outline: 1px solid var(--lo2); }
+.text h3 { margin: 0 0 10px; font-size: 16px; }
+.next { margin-top: 8px; color: var(--muted); }
+select.b { padding: 3px 6px; min-height: 26px; flex: 1; font: inherit; }
+.reading .show { display: inline-block; }
+.show { display: none; }
+.stoprow { display: none; gap: 6px; margin-top: 12px; }
+.reading .stoprow { display: flex; }
+.stoprow .b { flex: 1; }
+@media (prefers-reduced-motion: reduce) { .segs i.now { animation: none; } }
 
-.view.settings { display: none; }
-body.in-settings .view.home { display: none; }
-body.in-settings .view.settings { display: block; }
+.view.settings, .view.bible, .view.now { display: none; }
+body[data-view] .view.home { display: none; }
+body[data-view="settings"] .view.settings, body[data-view="bible"] .view.bible, body[data-view="now"] .view.now { display: block; }
 .bar-top { display: flex; align-items: center; justify-content: space-between; }
 .bar-top h2 { margin: 0; font-size: 17px; }
 .more { margin-top: 14px; }
@@ -128,6 +168,7 @@ body.in-settings .view.settings { display: block; }
 
 <section class="view home">
   <div class="head">
+    <div class="corner"><button class="b" id="open-bible" title="Read the Bible">Bible</button><button class="b cog" id="open-settings" title="Settings" aria-label="Settings">⚙</button></div>
     <div class="icon well"><img id="icon" alt="The Angel with the Golden Hair"></div>
     <div>
       <h1>Reader</h1>
@@ -138,21 +179,24 @@ body.in-settings .view.settings { display: block; }
   </div>
 
   <fieldset class="box status"><legend>Breaks</legend>
-    <div class="row"><div class="big" id="next">…</div><div class="check bevel" id="enabled" role="switch" tabindex="0" title="Breaks on"></div></div>
-    <div class="sub" id="sub"></div>
-    <div class="bar well"><i id="bar"></i></div>
+    <div class="timer">
+      <div class="clock" id="clock">0:00:00</div>
+      <div class="tlabel"><div class="big" id="next">…</div><div class="sub" id="sub"></div></div>
+    </div>
+    <div class="segs well" id="segs"></div>
+    <div class="row onrow"><label class="l" for="enabled">Breaks on</label><div class="check bevel" id="enabled" role="switch" tabindex="0"></div></div>
     <div class="actions">
       <button class="b default" data-do="break">Break Now</button>
       <button class="b" data-do="listen">Listen</button>
       <button class="b" data-do="today">Today's Readings</button>
     </div>
-    <button class="b stop" data-do="stop">Stop Reading</button>
+    <div class="stoprow"><button class="b" id="show-text">Show Text</button><button class="b" data-do="stop">Stop Reading</button></div>
   </fieldset>
 
   <fieldset class="box ahead"><legend>Ahead</legend>
-    <div id="ahead-now"></div>
-    <div id="ahead-feast"></div>
-    <div id="ahead-season"></div>
+    <div class="arow" id="ahead-now"></div>
+    <div class="arow" id="ahead-feast"></div>
+    <div class="arow" id="ahead-season"></div>
   </fieldset>
 
   <fieldset class="box"><legend>Calendar</legend>
@@ -167,7 +211,6 @@ body.in-settings .view.settings { display: block; }
     <div class="detail well" id="detail"></div>
   </fieldset>
 
-  <button class="b more" id="open-settings">Settings…</button>
 </section>
 
 <section class="view settings">
@@ -183,7 +226,7 @@ body.in-settings .view.settings { display: block; }
   </fieldset>
 
   <fieldset class="box"><legend>Reading</legend>
-    <div class="stack"><div class="seg" data-key="content"><button class="b" data-v="mixed">Mixed</button><button class="b" data-v="saints">Saints</button><button class="b" data-v="scripture">Scripture</button><button class="b" data-v="psalter">Psalter</button></div></div>
+    <div class="stack"><div class="seg" data-key="content"><button class="b" data-v="mixed">Mixed</button><button class="b" data-v="saints">Saints</button><button class="b" data-v="scripture">Scripture</button><button class="b" data-v="gospels">Gospels</button><button class="b" data-v="psalter">Psalter</button></div></div>
     <div class="row"><label class="l">Prayers</label><div class="check bevel" data-key="prayers"></div></div>
     <div class="row"><label class="l">The Hour of the day</label><div class="check bevel" data-key="hours"></div></div>
     <div class="row"><label class="l">Morning prayers each new day</label><div class="check bevel" data-key="morning"></div></div>
@@ -213,6 +256,22 @@ body.in-settings .view.settings { display: block; }
   <fieldset class="box"><legend>Appearance</legend>
     <div class="seg" data-key="theme"><button class="b" data-v="system">System</button><button class="b" data-v="light">Light</button><button class="b" data-v="dark">Dark</button></div>
   </fieldset>
+</section>
+
+<section class="view bible">
+  <div class="bar-top"><h2>The Bible</h2><button class="b default" id="close-bible">Done</button></div>
+  <fieldset class="box"><legend>Book</legend>
+    <div class="row"><select class="b" id="book" aria-label="Book"></select>
+      <span class="step" id="chap"><button class="b" aria-label="Previous chapter">◀</button><output class="well"></output><button class="b" aria-label="Next chapter">▶</button></span></div>
+    <div class="row"><button class="b default" id="read-aloud">Read Aloud</button><button class="b" data-do="stop">Stop</button></div>
+  </fieldset>
+  <div class="text well" id="bible-text"></div>
+</section>
+
+<section class="view now">
+  <div class="bar-top"><h2>Now Reading</h2><button class="b default" id="close-now">Done</button></div>
+  <div class="text well" id="now-text"></div>
+  <div class="next" id="now-next"></div>
 </section>
 
 </main>
@@ -251,7 +310,7 @@ $$(".check[data-key]").forEach(box => {
   const label = $("label", box.closest(".row"));
   if (label) label.onclick = flip;
 });
-$$(".step").forEach(st => {
+$$(".step[data-key]").forEach(st => {
   const [less, more] = $$("button", st);
   const move = dir => {
     const key = st.dataset.key;
@@ -269,7 +328,7 @@ function paint() {
   applyTheme();
   $$(".seg").forEach(seg => $$("button", seg).forEach(b => b.classList.toggle("on", cfg[seg.dataset.key] === b.dataset.v)));
   $$(".check[data-key]").forEach(box => { box.classList.toggle("on", !!cfg[box.dataset.key]); box.setAttribute("aria-checked", !!cfg[box.dataset.key]); });
-  $$(".step").forEach(st => {
+  $$(".step[data-key]").forEach(st => {
     const v = cfg[st.dataset.key];
     $("output", st).textContent = st.dataset.list === "voices" ? ((voices.find(x => x[0] === v) || [, v])[1]) : FMT[st.dataset.fmt](v);
   });
@@ -307,11 +366,33 @@ function drawMonth() {
 }
 function showAhead(a) {
   if (!a) return;
-  const when = x => x.days === 0 ? "today" : x.days === 1 ? "tomorrow" : `in ${x.days} days`;
-  $("#ahead-now").textContent = a.now ? `Now: ${a.now}` : "";
-  $("#ahead-feast").textContent = a.feast ? `Next great feast: ${a.feast.name}, ${when(a.feast)}` : "";
-  $("#ahead-season").textContent = a.season ? `Next fast: ${a.season.name}, ${when(a.season)}` : "";
+  const count = x => x.days === 0 ? "Today" : x.days === 1 ? "1 day" : `${x.days} days`;
+  const date = iso => new Date(iso + "T12:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const row = (kind, x) => x ? `<span class="kind">${kind}</span><span class="name">${esc(x.name)}<small>${date(x.iso)}</small></span><span class="days well">${count(x)}</span>` : "";
+  $("#ahead-now").innerHTML = a.now ? `<span class="kind">Now</span><span class="name">${esc(a.now)}</span><span></span>` : "";
+  $("#ahead-feast").innerHTML = row("Great feast", a.feast);
+  $("#ahead-season").innerHTML = row("Fast", a.season);
 }
+
+// the clock: synced each second from the app, counting down smoothly in between
+let clock = { secs: 0, at: 0, running: false, active: 0, work: 7200 };
+$("#segs").innerHTML = "<i></i>".repeat(12);
+function hms(t) {
+  t = Math.max(0, Math.round(t));
+  const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60;
+  return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+function tick() {
+  const passed = clock.running ? (performance.now() - clock.at) / 1000 : 0;
+  $("#clock").textContent = clock.paused ? "--:--" : hms(clock.secs - passed);
+  const share = clock.reading ? 0 : Math.min(1, (clock.active + passed) / clock.work);
+  const filled = share * 12;
+  $$("#segs i").forEach((b, i) => {
+    b.classList.toggle("full", i < Math.floor(filled));
+    b.classList.toggle("now", !clock.paused && !clock.reading && i === Math.floor(filled) && filled < 12);
+  });
+}
+setInterval(tick, 250);
 async function loadMonth(y, m, pick) {
   const data = await api(`/api/month?y=${y}&m=${m}`);
   if (!data) return;
@@ -343,12 +424,15 @@ async function refresh() {
   $("#date").textContent = st.date;
   $("#feast").textContent = st.feast;
   $("#fast").textContent = st.today && st.today.fast_text ? st.today.fast_text : "";
-  $("#next").textContent = st.headline;
   $("#sub").textContent = st.sub;
-  $("#bar").style.width = (st.progress * 100).toFixed(1) + "%";
-  $(".bar").style.visibility = st.enabled && !st.reading ? "visible" : "hidden";
+  clock = { secs: st.reading ? st.left : st.until, at: performance.now(), running: st.reading || st.enabled,
+            paused: !st.enabled && !st.reading, reading: st.reading, active: st.active, work: st.work };
+  $(".status").classList.toggle("paused", clock.paused);
+  $("#next").textContent = st.reading ? st.headline : (st.enabled ? "until the next reading" : "Breaks are paused");
+  tick();
   $("#enabled").classList.toggle("on", st.enabled);
   document.body.classList.toggle("reading", st.reading);
+  showNow(st.now);
   if (!iconSet) { iconSet = true; $("#icon").src = `/icon?t=${TOKEN}`; }
   if (todayIso !== st.day) {
     todayIso = st.day;
@@ -357,10 +441,64 @@ async function refresh() {
     loadMonth(y, m, want ? null : st.day);
   }
 }
-$("#open-settings").onclick = () => { document.body.classList.add("in-settings"); scrollTo(0, 0); };
-$("#close-settings").onclick = () => { document.body.classList.remove("in-settings"); scrollTo(0, 0); };
-addEventListener("keydown", e => e.key === "Escape" && document.body.classList.remove("in-settings"));
-if (location.hash === "#settings") document.body.classList.add("in-settings");
+function show(view) {
+  if (view) document.body.dataset.view = view; else delete document.body.dataset.view;
+  scrollTo(0, 0);
+  if (view === "bible" && !books.length) loadBooks();
+}
+$("#open-settings").onclick = () => show("settings");
+$("#close-settings").onclick = () => show(null);
+$("#open-bible").onclick = () => show("bible");
+$("#close-bible").onclick = () => show(null);
+$("#show-text").onclick = () => show("now");
+$("#close-now").onclick = () => show(null);
+addEventListener("keydown", e => e.key === "Escape" && show(null));
+
+// the Bible: choose a book and chapter, read it yourself, or have it read aloud
+let books = [], bookIndex = 0, chapter = 1;
+async function loadBooks() {
+  const data = await api("/api/bible");
+  if (!data) return;
+  books = data.books;
+  const sel = $("#book");
+  let html = "", group = null;
+  books.forEach((b, i) => {
+    if (b.group !== group) { if (group) html += "</optgroup>"; group = b.group; html += `<optgroup label="${esc(group)}">`; }
+    html += `<option value="${i}">${esc(b.name)}</option>`;
+  });
+  sel.innerHTML = html + "</optgroup>";
+  sel.onchange = () => { bookIndex = +sel.value; chapter = 1; loadChapter(); };
+  loadChapter();
+}
+async function loadChapter() {
+  const b = books[bookIndex];
+  $("#book").value = String(bookIndex);
+  $("#chap output").textContent = `${b.name === "Psalms" ? "Psalm" : "Chapter"} ${chapter} of ${b.chapters}`;
+  const data = await api(`/api/bible?b=${encodeURIComponent(b.name)}&c=${chapter}`);
+  if (!data) return;
+  $("#bible-text").innerHTML = `<h3>${esc(data.title)}</h3>` + data.verses.map((v, i) => `<p><sup>${i + 1}</sup>${esc(v)}</p>`).join("");
+}
+const [chapLess, chapMore] = $$("#chap button");
+chapLess.onclick = () => { if (chapter > 1) { chapter--; loadChapter(); } else if (bookIndex > 0) { bookIndex--; chapter = books[bookIndex].chapters; loadChapter(); } };
+chapMore.onclick = () => { if (chapter < books[bookIndex].chapters) { chapter++; loadChapter(); } else if (bookIndex < books.length - 1) { bookIndex++; chapter = 1; loadChapter(); } };
+$("#read-aloud").onclick = () => api("/api/do", { action: "text", book: books[bookIndex].name, chapter }).then(() => setTimeout(refresh, 300));
+
+// Now Reading: the whole text of what is being read, the sentence being spoken marked
+let nowTitle = null;
+function showNow(now) {
+  if (!now) { $("#now-text").innerHTML = "<p>Nothing is being read.</p>"; $("#now-next").textContent = ""; nowTitle = null; return; }
+  if (now.title !== nowTitle) {
+    nowTitle = now.title;
+    $("#now-text").innerHTML = `<h3>${esc(now.title)}</h3>` + now.lines.map(l => `<p>${esc(l)}</p>`).join("");
+  }
+  const key = (now.caption || "").slice(0, 40);
+  let marked = null;
+  $$("#now-text p").forEach(el => { const on = !!key && el.textContent.includes(key); el.classList.toggle("here", on); if (on) marked = el; });
+  if (marked && document.body.dataset.view === "now") marked.scrollIntoView({ block: "nearest" });
+  $("#now-next").textContent = now.next ? `Next: ${now.next}` : "";
+}
+if (location.hash === "#settings") show("settings");
+if (location.hash === "#bible") show("bible");
 refresh();
 setInterval(refresh, 1000);
 </script>

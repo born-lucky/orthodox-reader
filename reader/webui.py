@@ -40,9 +40,9 @@ class Server:
     """state() -> dict and handle(kind, payload) are given by the app; handle runs
     on the server thread and must only queue work for the Tk thread."""
 
-    def __init__(self, state, handle, icon_path, month) -> None:
+    def __init__(self, state, handle, icon_path, month, bible) -> None:
         self.token = secrets.token_urlsafe(16)
-        self.state, self.handle, self.icon_path, self.month = state, handle, icon_path, month
+        self.state, self.handle, self.icon_path, self.month, self.bible = state, handle, icon_path, month, bible
         server = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -85,6 +85,14 @@ class Server:
                     return self._send(200, buf.getvalue(), "image/png")
                 if path == "/api/state":
                     return self._send(200, json.dumps(server.state()).encode(), "application/json")
+                if path == "/api/bible":
+                    q = parse_qs(urlparse(self.path).query)
+                    book = q.get("b", [""])[0]
+                    try:
+                        chapter = int(q.get("c", ["1"])[0])
+                    except ValueError:
+                        chapter = 1
+                    return self._send(200, json.dumps(server.bible(book, chapter)).encode(), "application/json")
                 if path == "/api/month":
                     q = parse_qs(urlparse(self.path).query)
                     try:
