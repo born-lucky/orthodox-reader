@@ -38,7 +38,11 @@ DEFAULTS = {
     "room": True,              # place the voice in a room (reverb, distance) instead of in your ears
     "voice": "en-GB-RyanNeural",  # an edge voice, or "sapi" for the offline Windows voice
     "rate": -10,               # speech speed, percent
-    "warn_seconds": 60,
+    "warn_seconds": 60,        # the heads-up before a break
+    "snooze_minutes": 10,      # the heads-up's Snooze; 0: no Snooze
+    "break_from": 0,           # breaks only between these hours (0-24; from == to: all day)
+    "break_to": 24,
+    "break_days": [True] * 7,  # Monday..Sunday: breaks on these days
     "emergency_exit": False,   # hold Ctrl+Alt+Shift+End to end a locked break (off: Ctrl+Alt+Del is the real emergency)
     "strict": False,           # breaks and the morning cannot be stopped: no Stop, no ✕, no emergency exit
     "extreme": False,          # strict, and more: no Snooze, no Quit, and a break cut off by closing Reader starts over
@@ -81,12 +85,19 @@ EXTREME = {"extreme": True, "enabled": True, "mode": "lock", "strict": True, "em
 # what extreme holds still while it is on: anything that could skip, shorten or soften a break.
 # Extreme itself can be turned off, between breaks.
 FROZEN = (set(EXTREME) - {"extreme"}) | {"work_minutes", "break_minutes", "sleep_hours", "away_minutes", "morning",
-                                         "morning_minutes", "warn_seconds"}
+                                         "morning_minutes", "warn_seconds", "snooze_minutes",
+                                         "break_from", "break_to", "break_days"}
 
 
 def load() -> dict:
     out = dict(DEFAULTS)
     out.update({k: v for k, v in _read(SETTINGS).items() if k in DEFAULTS})
+    days = out["break_days"]
+    if not (isinstance(days, list) and len(days) == 7 and any(days)):
+        out["break_days"] = list(DEFAULTS["break_days"])
+    for key in ("break_from", "break_to"):
+        if not isinstance(out[key], int):
+            out[key] = DEFAULTS[key]
     if out["extreme"]:
         out.update(EXTREME)
     return out

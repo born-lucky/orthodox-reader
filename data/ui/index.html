@@ -302,6 +302,13 @@ body.festal #feast { display: none; }   /* the banner carries the name */
   <fieldset class="box"><legend>Time</legend>
     <div class="row"><span>Break every</span><span class="step" data-key="work_minutes" data-min="15" data-max="480" data-by="15" data-fmt="min"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
     <div class="row"><span>Break length</span><span class="step" data-key="break_minutes" data-min="1" data-max="60" data-by="1" data-fmt="min"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
+    <div class="row"><span>Heads-up before</span><span class="step" data-key="warn_seconds" data-min="0" data-max="300" data-by="15" data-fmt="sec"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
+    <div class="row"><span>Snooze</span><span class="step" data-key="snooze_minutes" data-min="0" data-max="60" data-by="5" data-fmt="snooze"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
+    <div class="row"><span>Breaks from</span><span class="step" data-key="break_from" data-min="0" data-max="24" data-by="1" data-fmt="hour"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
+    <div class="row"><span>Until</span><span class="step" data-key="break_to" data-min="0" data-max="24" data-by="1" data-fmt="hour"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
+    <div class="stack"><span class="label">On these days</span>
+      <div class="seg days" data-key="break_days"><button class="b">Mon</button><button class="b">Tue</button><button class="b">Wed</button><button class="b">Thu</button><button class="b">Fri</button><button class="b">Sat</button><button class="b">Sun</button></div>
+      <div class="sub explain" id="hours-explain"></div></div>
     <div class="row"><span>Waking up after <span class="sub">(hours away)</span></span><span class="step" data-key="sleep_hours" data-min="2" data-max="14" data-by="1" data-fmt="h"><button class="b">◀</button><output class="well"></output><button class="b">▶</button></span></div>
     <div class="row"><label class="l">Start with Windows</label><div class="check bevel" data-key="autostart"></div></div>
   </fieldset>
@@ -359,7 +366,9 @@ const $ = (q, el = document) => el.querySelector(q), $$ = (q, el = document) => 
 let cfg = {}, voices = [], pending = {};
 $("#favicon").href = `/favicon.png?t=${TOKEN}`;
 
-const FMT = { pct: v => `${v}%`, min: v => `${v} min`, h: v => `${v} h`, rate: v => v === 0 ? "Normal" : (v > 0 ? `+${v}%` : `${v}%`) };
+const FMT = { pct: v => `${v}%`, min: v => `${v} min`, h: v => `${v} h`,
+              sec: v => v === 0 ? "None" : (v % 60 ? `${v} s` : `${v / 60} min`),
+              snooze: v => v === 0 ? "Off" : `${v} min`, hour: v => `${String(v).padStart(2, "0")}:00`, rate: v => v === 0 ? "Normal" : (v > 0 ? `+${v}%` : `${v}%`) };
 
 async function api(path, body) {
   const r = await fetch(path, { method: body ? "POST" : "GET", headers: { "X-Token": TOKEN, "Content-Type": "application/json" },
@@ -368,7 +377,8 @@ async function api(path, body) {
 }
 // extreme holds these still (settings.FROZEN)
 const FROZEN = ["enabled", "mode", "strict", "emergency_exit", "autostart", "work_minutes", "break_minutes",
-                "sleep_hours", "away_minutes", "morning", "morning_minutes", "warn_seconds"];
+                "sleep_hours", "away_minutes", "morning", "morning_minutes", "warn_seconds",
+                "snooze_minutes", "break_from", "break_to", "break_days"];
 function set(key, value) {
   if (cfg.extreme && FROZEN.includes(key)) return;
   if (key === "extreme" && value && !confirm("Every break locks your keyboard and mouse until it is over. "
@@ -386,7 +396,12 @@ function applyTheme() {
 }
 dark.addEventListener("change", applyTheme);
 
-$$(".seg").forEach(seg => $$("button", seg).forEach(b => b.onclick = () => set(seg.dataset.key, b.dataset.v)));
+$$(".seg:not(.days)").forEach(seg => $$("button", seg).forEach(b => b.onclick = () => set(seg.dataset.key, b.dataset.v)));
+$$(".seg.days button").forEach((b, i) => b.onclick = () => {
+  const days = (cfg.break_days || Array(7).fill(true)).slice();
+  days[i] = !days[i];
+  if (days.some(Boolean)) set("break_days", days);  // at least one day: no days at all is the Breaks switch
+});
 $$(".check[data-key]").forEach(box => {
   box.setAttribute("role", "checkbox"); box.tabIndex = 0;
   const flip = () => set(box.dataset.key, !cfg[box.dataset.key]);
@@ -411,7 +426,13 @@ $$("[data-do]").forEach(b => b.onclick = () => api("/api/do", { action: b.datase
 
 function paint() {
   applyTheme();
-  $$(".seg").forEach(seg => $$("button", seg).forEach(b => b.classList.toggle("on", cfg[seg.dataset.key] === b.dataset.v)));
+  $$(".seg:not(.days)").forEach(seg => $$("button", seg).forEach(b => b.classList.toggle("on", cfg[seg.dataset.key] === b.dataset.v)));
+  $$(".seg.days button").forEach((b, i) => b.classList.toggle("on", !!(cfg.break_days || [])[i]));
+  const allDay = cfg.break_from % 24 === cfg.break_to % 24, everyDay = (cfg.break_days || []).every(Boolean);
+  $("#hours-explain").textContent = allDay && everyDay ? "Breaks come at any hour, every day."
+    : `Breaks come ${allDay ? "at any hour" : `from ${FMT.hour(cfg.break_from)} to ${FMT.hour(cfg.break_to)}`}`
+      + `${everyDay ? ", every day" : " on the days marked"}. Outside them, time is not counted.`
+      + (cfg.extreme ? " Extreme ignores these: its breaks come at any hour." : "");
   $$(".check[data-key]").forEach(box => { box.classList.toggle("on", !!cfg[box.dataset.key]); box.setAttribute("aria-checked", !!cfg[box.dataset.key]); });
   $$(".step[data-key]").forEach(st => {
     const v = cfg[st.dataset.key];

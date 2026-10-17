@@ -34,6 +34,26 @@ def idle_seconds() -> float:
     return ((now - info.dwTime) & 0xFFFFFFFF) / 1000.0
 
 
+def in_window(now: float, cfg: dict) -> bool:
+    """Breaks come only on the chosen days, between the chosen hours (from == to: all day)."""
+    when = dt.datetime.fromtimestamp(now)
+    days = cfg.get("break_days", [True] * 7)
+    start, end = cfg.get("break_from", 0) % 24, cfg.get("break_to", 24) % 24
+    if start == end:
+        return bool(days[when.weekday()])
+    if start < end:
+        return bool(days[when.weekday()]) and start <= when.hour < end
+    if when.hour >= start:
+        return bool(days[when.weekday()])
+    # after midnight: the night belongs to the day it began on (Monday 22:00 to 02:00 is Monday's)
+    return bool(days[(when.weekday() - 1) % 7]) and when.hour < end
+
+
+def counts(now: float, cfg: dict) -> bool:
+    """Extreme ignores the hours and days: a clock or time-zone change must not end the breaks."""
+    return bool(cfg.get("extreme")) or in_window(now, cfg)
+
+
 class Tracker:
     """Pure bookkeeping (no Windows calls) so it can be tested with fake clocks.
 
@@ -68,12 +88,17 @@ class Tracker:
         elif absence >= cfg["away_minutes"] * 60:
             self._restart_cycle()
             events.append("rested")
-        elif 0 < step <= POLL * 6:  # a bigger step is a suspend we did not see as idle
+        elif 0 < step <= POLL * 6 and counts(now, cfg):  # a bigger step is a suspend we did not see as idle
             st["active"] = st.get("active", 0.0) + step
         st["last_seen"] = seen
+        if not counts(now, cfg):
+            st["warned"] = False  # outside the break hours: no warning, no break; warn again when they open
+            return events
         work = cfg["work_minutes"] * 60
         active = st.get("active", 0.0)
-        if active >= work - cfg["warn_seconds"] and now >= st.get("snooze", 0) - cfg["warn_seconds"] and not st.get("warned"):
+        warn = cfg["warn_seconds"]
+        if (warn > 0 and active >= work - warn and now >= st.get("snooze", 0) - warn and not st.get("warned")
+                and counts(now + warn, cfg)):  # no heads-up for a break the closing hours would cancel
             st["warned"] = True
             events.append("warn")
         if active >= work and now >= st.get("snooze", 0):

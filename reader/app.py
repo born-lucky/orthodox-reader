@@ -128,6 +128,8 @@ class App:
             sub = "Extreme: the breaks come, always."
         elif not self.cfg["enabled"]:
             headline, sub = "Automatic readings are off", "Readings are still a click away."
+        elif not activity.in_window(time.time(), self.cfg):
+            headline, sub = "No breaks now", "Outside your break hours. Readings are still a click away."
         else:
             headline = f"Next break in {spell_time(self.tracker.until_break(self.cfg))}"
             sub = f"{spell_time(self.tracker.state.get('active', 0))} of work since the last break"
@@ -244,10 +246,16 @@ class App:
 
     def _set(self, key: str, value) -> None:
         kind = type(settings.DEFAULTS[key])
+        if kind is list and not isinstance(value, list):
+            return
         try:
             value = kind(value) if kind is not bool else bool(value)
         except (TypeError, ValueError):
             return
+        if key == "break_days":
+            value = [bool(d) for d in value]
+            if len(value) != 7 or not any(value):  # no days at all is the Breaks switch
+                return
         if self.cfg["extreme"] and key in settings.FROZEN:
             log.info("set %s refused: extreme", key)
             return
@@ -507,13 +515,22 @@ class App:
 
         def snooze():
             self.notice = None
-            self.tracker.snooze(time.time(), 10)
+            self.tracker.snooze(time.time(), self.cfg["snooze_minutes"])
 
-        self.notice = overlay.Notice(self.root, seconds, text, None if self.cfg["extreme"] else snooze, now)
+        can_snooze = not self.cfg["extreme"] and self.cfg["snooze_minutes"] > 0
+        self.notice = overlay.Notice(self.root, seconds, text, snooze if can_snooze else None, now,
+                                     snooze_minutes=self.cfg["snooze_minutes"])
         if kind == "morning":  # the morning session starts by itself after the countdown
             self.root.after(seconds * 1000, lambda: self.notice is not None and (self.notice.close(), now()))
         else:
-            self.root.after(seconds * 1000, lambda: setattr(self, "notice", None) if self.notice else None)
+            notice = self.notice
+
+            def expire():  # the break itself takes over; this heads-up must not stay on screen
+                if self.notice is notice:
+                    notice.close()
+                    self.notice = None
+
+            self.root.after(seconds * 1000, expire)
 
     def _fetch_today(self) -> None:
         self.library.day(dt.date.today())

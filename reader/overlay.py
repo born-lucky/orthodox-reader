@@ -233,7 +233,7 @@ class ReadAlong:
 class Notice:
     """A quiet heads-up before a break, with Snooze."""
 
-    def __init__(self, root: tk.Tk, seconds: int, text: str, on_snooze, on_now) -> None:
+    def __init__(self, root: tk.Tk, seconds: int, text: str, on_snooze, on_now, snooze_minutes: int = 10) -> None:
         win = self.win = tk.Toplevel(root)
         win.overrideredirect(True)
         win.attributes("-topmost", True)
@@ -249,8 +249,8 @@ class Notice:
         self.count.pack(fill="x", padx=14)
         row = tk.Frame(frame, bg=t.PAGE)
         row.pack(fill="x", padx=12, pady=8)
-        for label, action in (("Begin now", on_now), ("Snooze 10 min", on_snooze)):
-            if action is None:  # extreme: no Snooze
+        for label, action in (("Begin now", on_now), (f"Snooze {snooze_minutes} min", on_snooze)):
+            if action is None:  # extreme, or Snooze turned off
                 continue
             b = tk.Label(row, text=label, fg=t.RED, bg=t.PAGE_DEEP, font=(SERIF, 10), padx=10, pady=3, cursor="hand2")
             b.pack(side="left", padx=4)

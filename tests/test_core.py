@@ -255,3 +255,98 @@ def test_announcement_counts_the_days():
                                           "12 days until the Nativity of Christ.",
                                           "The Nativity Fast begins tomorrow."]
     assert announcement({"feast": None, "season": None}, {"feast_level": 2, "feasts": ["St X"]}) == []
+
+
+def test_breaks_only_in_their_hours():
+    """Outside the break hours, use is not counted and no break comes."""
+    cfg = dict(CFG, break_from=9, break_to=17, break_days=[True] * 7)
+    tr = Tracker({})
+    t0 = dt.datetime(2026, 10, 3, 7, 0).timestamp()  # 7:00, before the window
+    events, t = [], t0
+    while t < t0 + 3 * 3600:  # 7:00 to 10:00
+        t += 5
+        events += tr.tick(t, 0, cfg)
+    assert "break" not in events
+    assert 3500 < tr.state["active"] < 3700  # only 9:00-10:00 counted
+
+
+def test_hours_can_cross_midnight():
+    from reader.activity import in_window
+    cfg = {"break_from": 22, "break_to": 2, "break_days": [True] * 7}
+    assert in_window(dt.datetime(2026, 10, 3, 23, 0).timestamp(), cfg)
+    assert in_window(dt.datetime(2026, 10, 3, 1, 0).timestamp(), cfg)
+    assert not in_window(dt.datetime(2026, 10, 3, 12, 0).timestamp(), cfg)
+    assert in_window(dt.datetime(2026, 10, 3, 12, 0).timestamp(), dict(cfg, break_from=0, break_to=24))
+
+
+def test_no_breaks_on_days_off():
+    from reader.activity import in_window
+    days = [True] * 5 + [False, False]  # Monday-Friday
+    saturday = dt.datetime(2026, 10, 3, 12, 0).timestamp()
+    monday = dt.datetime(2026, 10, 5, 12, 0).timestamp()
+    cfg = {"break_from": 0, "break_to": 24, "break_days": days}
+    assert not in_window(saturday, cfg) and in_window(monday, cfg)
+
+
+def test_extreme_freezes_the_new_break_settings():
+    from reader import settings
+    for key in ("break_from", "break_to", "break_days", "snooze_minutes"):
+        assert key in settings.FROZEN and key in settings.DEFAULTS
+
+
+def test_break_days_must_be_seven(monkeypatch):
+    from reader import settings
+    from reader.app import App
+    app = _Stub(strict=False)
+    monkeypatch.setattr(settings, "save", lambda cfg: None)
+    App._set(app, "break_days", [1, 1, 1, 1, 1, 0, 0])
+    assert app.cfg["break_days"] == [True] * 5 + [False] * 2
+    App._set(app, "break_days", [True])
+    assert len(app.cfg["break_days"]) == 7
+
+
+def test_no_heads_up_means_none():
+    cfg = dict(CFG, warn_seconds=0)
+    tr = Tracker({})
+    events, t = [], T0
+    while t < T0 + 120 * 60 + 10:
+        t += 5
+        events += tr.tick(t, 0, cfg)
+    assert "warn" not in events and "break" in events
+
+
+def test_extreme_ignores_break_hours():
+    """A clock or time-zone change must not end Extreme's breaks."""
+    cfg = dict(CFG, break_from=9, break_to=17, break_days=[True] * 7, extreme=True)
+    tr = Tracker({})
+    t0 = dt.datetime(2026, 10, 3, 18, 0).timestamp()
+    events, t = [], t0
+    while t < t0 + 120 * 60 + 10:
+        t += 5
+        events += tr.tick(t, 0, cfg)
+    assert "break" in events
+
+
+def test_a_night_belongs_to_the_day_it_began():
+    from reader.activity import in_window
+    cfg = {"break_from": 22, "break_to": 2, "break_days": [True] + [False] * 6}  # Monday only
+    assert in_window(dt.datetime(2026, 10, 5, 23, 0).timestamp(), cfg)       # Monday 23:00
+    assert in_window(dt.datetime(2026, 10, 6, 1, 0).timestamp(), cfg)        # Tuesday 01:00: Monday's night
+    assert not in_window(dt.datetime(2026, 10, 5, 1, 0).timestamp(), cfg)    # Monday 01:00: Sunday's night
+
+
+def test_no_heads_up_for_a_break_the_closing_hour_cancels():
+    cfg = dict(CFG, break_from=0, break_to=17, break_days=[True] * 7)
+    tr = Tracker({"active": 120 * 60 - 40, "last_seen": 0, "day": "2026-10-03"})
+    tr.state["last_seen"] = dt.datetime(2026, 10, 3, 16, 59, 30).timestamp()
+    t = tr.state["last_seen"]
+    tr.tick(t, 0, cfg)
+    assert tr.tick(t + 5, 0, cfg) == []  # 16:59:35: the break would land after 17:00
+
+
+def test_bad_break_days_fall_back(tmp_path, monkeypatch):
+    from reader import settings
+    monkeypatch.setattr(settings, "SETTINGS", tmp_path / "settings.json")
+    for bad in ([], None, [True] * 3, [False] * 7, "1111111"):
+        settings.save(dict(settings.DEFAULTS, break_days=bad))
+        assert settings.load()["break_days"] == [True] * 7, bad

@@ -2,6 +2,16 @@
 
 A quiet Orthodox companion for Windows, for people who don't have time to sit down and read. It starts with Windows. When you wake up (six hours or more away from the computer), it reads you the day by the old calendar: the appointed Scripture and the lives of that day's saints, together in one session. Through the day, every two hours of work, it takes a fifteen-minute break and reads lives of the saints over soft birdsong. No streaks, no scores, nothing to keep up with.
 
+<p align="center">
+  <img src="docs/screenshots/home-light.png" width="300" alt="The main window: next break, the feast and fast ahead, and the old-calendar month">
+  <img src="docs/screenshots/home-dark.png" width="300" alt="The same window in dark mode">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/break-screen.png" width="620" alt="A locked break: the Angel with the Golden Hair, the title of the life being read, and the words being spoken">
+  <br><sub>A break in Lock mode: the icon, what is being read, the sentence being spoken, and a quiet clock.</sub>
+</p>
+
 - **Read it yourself, or hear it.** The **Bible** button opens the whole Bible in Orthodox order: the Gospels (KJV), Acts and the Epistles, the Psalter (your Septuagint Psalter if you have one), the Old Testament with Tobit, Judith, Wisdom, Sirach and Baruch (Brenton). Read any chapter, or press **Read Aloud**. During a reading, **Show Text** shows the whole text with the sentence being spoken marked, and what comes next.
 - **Never the same twice.** Readings are dealt from shuffled decks, not drawn at random: nothing is read again until everything of its kind has been read, and the decks are kept between days. Or choose **Gospels** or **Psalter** to read straight through, continuing where you left off.
 - **Two kinds of break.** *Lock screen*: a full-screen icon, the words being read, or darkness, with the mouse and keyboard held for the break. *Audio only*: the reading plays while you keep working, with an optional small window to read along.
@@ -11,6 +21,38 @@ A quiet Orthodox companion for Windows, for people who don't have time to sit do
 - **A free voice, in a room.** Microsoft's neural voices through `edge-tts` when online, and the Windows voice offline. No account, no key, no cost. The voice is placed a few metres away in a quiet stone church (distance, early reflections, a soft stereo tail) and kept at a calm level, so it never sits inside your ears.
 - **Birdsong and a brook**, synthesised (no recordings), as a seamless loop.
 - **Honest about your time.** It measures real use (mouse and keyboard). Fifteen minutes away already counts as a break, and five hours away is a night: a new day.
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![The day: feast, fast, saints and the appointed readings](docs/screenshots/day.png) | ![The Bible, with search, chapter openings and Read Aloud](docs/screenshots/bible.png) |
+| **The day.** Click any day for its feast, fast, saints and readings; open a Gospel or read the whole day aloud. | **The Bible.** Every book in Orthodox order, searchable, with the opening words of each chapter. |
+| ![Break settings: Lock or Audio, Strict, Extreme, Emergency exit](docs/screenshots/settings-break.png) | ![Time settings: break length, heads-up, snooze, break hours and days](docs/screenshots/settings-time.png) |
+| **The break.** Lock your PC or audio only, what the screen shows, and how hard it is to leave. | **Your schedule.** How often and how long, the heads-up, Snooze, and which hours and days breaks come. |
+
+<p align="center"><img src="docs/screenshots/heads-up.png" width="380" alt="The heads-up before a break, with Begin now and Snooze"><br><sub>The heads-up before a break.</sub></p>
+
+## Make the breaks yours
+
+Everything is in **Settings**, and every choice takes effect at once:
+
+| Setting | Choices | Default |
+| --- | --- | --- |
+| Break | Lock My PC, or Audio Only | Lock |
+| While locked, the screen shows | the icon, large text, or black | Icon |
+| Break every | 15 min to 8 h | 2 h |
+| Break length | 1 to 60 min | 15 min |
+| Heads-up before | none to 5 min | 1 min |
+| Snooze | off, or 5 to 60 min | 10 min |
+| Breaks from / until | any hours; they may cross midnight (22:00 to 02:00) | all day |
+| On these days | any of Monday to Sunday | every day |
+| Reading | Saints, Mixed, Scripture, Gospels, Psalter | Saints |
+| Strict | no Stop and no ✕: sit through it | off |
+| Emergency exit | hold Ctrl+Alt+Shift+End for 3 s to end a locked break | off |
+| Extreme | the only way out is to wait | off |
+
+Outside your break hours and days, time at the computer is not counted, so a break never lands the moment the window opens. A night that crosses midnight belongs to the day it began on. Extreme ignores the hours and days, so changing the clock or time zone cannot end its breaks.
 
 ## Install
 
@@ -29,7 +71,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1   # build dist\Reader.exe
 
 A locked break can always be ended:
 
-- **Hold Ctrl+Alt+Shift+End for 3 seconds** (the emergency exit, on by default).
+- **Hold Ctrl+Alt+Shift+End for 3 seconds**, if you turn on **Emergency exit** in Settings → Break (off by default, so a break means a break). Strict and Extreme hide it.
 - **Ctrl+Alt+Del** always works. Windows never lets a program block it.
 - The lock **releases itself** a couple of minutes after the break should have ended, whatever happens, and it dies with the app.
 - Breaks can be paused from the window or the tray at any time.
@@ -89,6 +131,7 @@ The window is a local page in a chromeless Edge window, served on `127.0.0.1` on
 | `reader/webui.py`, `data/ui/` | the window |
 | `reader/ambience.py` | the synthesised birdsong |
 | `tools/build_my_texts.py` | your private pack from your own books |
+| `tools/screenshots.py` | the screenshots above, from a clean, empty profile |
 
 ## License
 
