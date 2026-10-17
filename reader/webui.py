@@ -10,8 +10,10 @@ around it; its profile lives in %APPDATA%\\OrthodoxReader\\window.
   GET  /icon            today's icon
   GET  /api/state       settings + status, polled by the page
   GET  /api/month?y=&m= a civil month of the old calendar: fasts, feasts, saints
+  GET  /api/lives?d=    the lives of a day's saints, to read or hear
+  GET  /api/passage?d=&i=  one appointed reading, opened from a Gospel link
   POST /api/set         {"key", "value"}
-  POST /api/do          {"action"}: break | listen | today | stop | toggle | hear
+  POST /api/do          {"action"}: break | listen | today | stop | toggle | hear | life | passage
 """
 
 from __future__ import annotations
@@ -40,9 +42,10 @@ class Server:
     """state() -> dict and handle(kind, payload) are given by the app; handle runs
     on the server thread and must only queue work for the Tk thread."""
 
-    def __init__(self, state, handle, icon_path, month, bible) -> None:
+    def __init__(self, state, handle, icon_path, month, bible, lives, passage) -> None:
         self.token = secrets.token_urlsafe(16)
-        self.state, self.handle, self.icon_path, self.month, self.bible = state, handle, icon_path, month, bible
+        self.state, self.handle, self.icon_path = state, handle, icon_path
+        self.month, self.bible, self.lives, self.passage = month, bible, lives, passage
         server = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -88,11 +91,13 @@ class Server:
                 if path == "/api/bible":
                     q = parse_qs(urlparse(self.path).query)
                     book = q.get("b", [""])[0]
+                    query = q.get("q", [""])[0]
+                    openings = q.get("openings", ["0"])[0] == "1"
                     try:
                         chapter = int(q.get("c", ["1"])[0])
                     except ValueError:
                         chapter = 1
-                    return self._send(200, json.dumps(server.bible(book, chapter)).encode(), "application/json")
+                    return self._send(200, json.dumps(server.bible(book, chapter, query, openings)).encode(), "application/json")
                 if path == "/api/month":
                     q = parse_qs(urlparse(self.path).query)
                     try:
@@ -100,6 +105,17 @@ class Server:
                     except (KeyError, ValueError):
                         return self._send(400, b"", "text/plain")
                     return self._send(200, json.dumps(server.month(year, month)).encode(), "application/json")
+                if path == "/api/lives":
+                    day = parse_qs(urlparse(self.path).query).get("d", [""])[0]
+                    return self._send(200, json.dumps(server.lives(day)).encode(), "application/json")
+                if path == "/api/passage":
+                    q = parse_qs(urlparse(self.path).query)
+                    try:
+                        index = int(q.get("i", ["-1"])[0])
+                    except ValueError:
+                        index = -1
+                    page = server.passage(q.get("d", [""])[0], index)
+                    return self._send(200, json.dumps(page).encode(), "application/json")
                 self._send(404, b"", "text/plain")
 
             def do_POST(self) -> None:
@@ -134,3 +150,25 @@ class Server:
 
     def close(self) -> None:
         self.httpd.shutdown()
+
+
+def close_stale_windows() -> None:
+    """A window left by an earlier Reader (killed, restarted) points at a server that is gone and
+    stays blank; Edge would also hand our new window to it. Close it before opening ours."""
+    try:
+        import psutil
+    except ImportError:
+        return
+    profile = str(PROFILE).lower()
+    stale = []
+    for proc in psutil.process_iter(["name", "cmdline"]):
+        try:
+            if (proc.info["name"] or "").lower() != "msedge.exe":
+                continue
+            cmd = " ".join(proc.info["cmdline"] or []).lower()
+            if profile in cmd and "--type=" not in cmd:  # the browser process of our profile only
+                proc.terminate()
+                stale.append(proc)
+        except (psutil.Error, OSError):
+            continue
+    psutil.wait_procs(stale, timeout=3)

@@ -11,6 +11,6 @@ python -m PyInstaller --noconfirm --clean --onefile --windowed `
     --collect-data certifi `
     --hidden-import pystray._win32 `
     --hidden-import reader.room --hidden-import _cffi_backend --collect-binaries miniaudio `
-    --hidden-import win32com.client --hidden-import pythoncom `
+    --hidden-import win32com.client --hidden-import pythoncom --hidden-import psutil `
     main.py
 Write-Host "Built: dist\Reader.exe"

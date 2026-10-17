@@ -39,11 +39,14 @@ DEFAULTS = {
     "voice": "en-GB-RyanNeural",  # an edge voice, or "sapi" for the offline Windows voice
     "rate": -10,               # speech speed, percent
     "warn_seconds": 60,
-    "emergency_exit": True,    # hold Ctrl+Alt+Shift+End to end a locked break
+    "emergency_exit": False,   # hold Ctrl+Alt+Shift+End to end a locked break (off: Ctrl+Alt+Del is the real emergency)
+    "strict": False,           # breaks and the morning cannot be stopped: no Stop, no ✕, no emergency exit
+    "extreme": False,          # strict, and more: no Snooze, no Quit, and a break cut off by closing Reader starts over
     "autostart": True,
     "week_start": "monday",    # the calendar: "monday" | "sunday"
     "old_dates": True,         # the calendar: old-style dates under each day
     "fast_reminder": True,     # a quiet note at the start of a fast day
+    "announce": True,          # once a day while you work, spoken: days to the next great feast and fast
     "theme": "system",         # "system" | "light" | "dark"
 }
 
@@ -72,9 +75,20 @@ def _write(path: Path, data: dict) -> None:
     tmp.replace(path)
 
 
+# ------------------------------------------------------------ extreme: a break you can only wait out
+
+EXTREME = {"extreme": True, "enabled": True, "mode": "lock", "strict": True, "emergency_exit": False, "autostart": True}
+# what extreme holds still while it is on: anything that could skip, shorten or soften a break.
+# Extreme itself can be turned off, between breaks.
+FROZEN = (set(EXTREME) - {"extreme"}) | {"work_minutes", "break_minutes", "sleep_hours", "away_minutes", "morning",
+                                         "morning_minutes", "warn_seconds"}
+
+
 def load() -> dict:
     out = dict(DEFAULTS)
     out.update({k: v for k, v in _read(SETTINGS).items() if k in DEFAULTS})
+    if out["extreme"]:
+        out.update(EXTREME)
     return out
 
 
@@ -93,6 +107,13 @@ def save_state(state: dict) -> None:
 # ------------------------------------------------------------ start with Windows
 
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+
+
+def launch_args(*extra: str) -> list[str]:
+    if getattr(sys, "frozen", False):
+        return [sys.executable, *extra]
+    pyw = Path(sys.executable).with_name("pythonw.exe")
+    return [str(pyw), str(Path(__file__).resolve().parent.parent / "main.py"), *extra]
 
 
 def launch_command() -> str:

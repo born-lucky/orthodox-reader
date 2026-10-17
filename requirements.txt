@@ -1,6 +1,7 @@
-edge-tts>=7
+edge-tts>=7.3.1
 pystray>=0.19
 pillow>=10
 pywin32>=306
 numpy>=1.26
 miniaudio>=1.59
+psutil>=5.9

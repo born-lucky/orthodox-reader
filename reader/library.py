@@ -123,6 +123,57 @@ def fast_of(data: dict) -> tuple[str, str]:
     return "strict", f"{name} · strict"
 
 
+def commemorations(data: dict) -> list[str]:
+    """Every saint and feast of the day, feasts first, with no one left out."""
+    seen: list[str] = []
+    for name in list(data.get("feasts") or []) + list(data.get("saints") or []):
+        name = str(name or "").strip()
+        if name and name not in seen:
+            seen.append(name)
+    return seen
+
+
+def reading_links(data: dict) -> list[dict]:
+    """The day's readings. A Gospel can be opened; `i` is its place in the day."""
+    out = []
+    for index, reading in enumerate(data.get("readings") or []):
+        display = str(reading.get("display") or "").strip()
+        if not display:
+            continue
+        source = str(reading.get("source") or "")
+        out.append({
+            "i": index,
+            "display": display,
+            "source": source,
+            "description": str(reading.get("description") or "").strip(),
+            "gospel": "gospel" in source.lower(),
+        })
+    return out
+
+
+_SPAN = re.compile(r"(\d+)[.:](\d+)(?:-(?:(\d+)[.:])?(\d+))?")
+
+
+def scripture_spans(display: str) -> tuple[str, list[tuple[int, int, int, int]]] | None:
+    """'Mark 6.54-7.8' -> ('Mark', [(6, 54, 7, 8)]). A citation we cannot read is None."""
+    text = str(display or "").strip()
+    match = re.match(r"^(.+?)\s+(\d.+)$", text)
+    if not match:
+        return None
+    spans = []
+    for found in _SPAN.finditer(match.group(2)):
+        chapter, verse, chapter2, verse2 = (int(found.group(i)) if found.group(i) else None for i in range(1, 5))
+        if verse2 is None:
+            spans.append((chapter, verse, chapter, verse))
+        elif chapter2 is None:
+            spans.append((chapter, verse, chapter, verse2))
+        else:
+            spans.append((chapter, verse, chapter2, verse2))
+    if not spans:
+        return None
+    return match.group(1).strip(), spans
+
+
 def summary(data: dict) -> dict:
     """What the calendar shows for a day."""
     kind, words = fast_of(data)
@@ -133,7 +184,8 @@ def summary(data: dict) -> dict:
         "title": titles[0] if titles else data.get("summary_title", ""),
         "feasts": [f for f in data.get("feasts") or [] if f],
         "saints": [s for s in data.get("saints") or [] if s],
-        "readings": [r.get("display") for r in data.get("readings") or [] if r.get("display")],
+        "commemorations": commemorations(data),
+        "readings": reading_links(data),
         "tone": data.get("tone"),
     }
 
@@ -364,6 +416,86 @@ class Library:
             lines.append("Today the Church commemorates " + "; ".join(saints) + ".")
         return Segment("calendar", "The Day on the Old Calendar", lines)
 
+    def passage_page(self, civil: dt.date, index: int) -> dict | None:
+        """One appointed reading: the title, the citation, the verses, and the words to speak.
+
+        The lectionary text is used when the day has it. Otherwise the citation is
+        read from the Bible kept in the app.
+        """
+        data = self.day(civil)
+        readings = (data or {}).get("readings") or []
+        if data is None or not 0 <= index < len(readings):
+            return None
+        reading = readings[index]
+        numbered, spoken = [], []
+        for verse in reading.get("passage") or []:
+            text = strip_html(verse.get("content") or "")
+            if not text:
+                continue
+            number = verse.get("verse")
+            numbered.append(f"{number}. {text}" if number else text)
+            spoken.append(text)
+        if not numbered:
+            numbered = self._cited_verses(reading.get("display") or "")
+            spoken = [re.sub(r"^\d+\. ", "", line) for line in numbered]
+        if not numbered:
+            return None
+        source = str(reading.get("source") or "")
+        if "matins" in source.lower():
+            title = "Matins Gospel"
+        elif "gospel" in source.lower():
+            title = "The Reading of the Holy Gospel"
+        else:
+            title = source or "Reading"
+        display = str(reading.get("display") or title)
+        description = str(reading.get("description") or "").strip()
+        return {
+            "title": title,
+            "citation": display + (f" · {description}" if description else ""),
+            "verses": numbered,
+            "spoken": spoken,
+        }
+
+    def passage_segment(self, iso: str, index: int) -> Segment | None:
+        try:
+            civil = dt.date.fromisoformat(iso)
+        except ValueError:
+            return None
+        page = self.passage_page(civil, index)
+        if not page:
+            return None
+        lines = [page["title"] + ".", page["citation"] + "."] + page["spoken"]
+        return Segment("scripture", page["title"], lines)
+
+    def _cited_verses(self, display: str) -> list[str]:
+        parsed = scripture_spans(display)
+        if not parsed:
+            return []
+        book, spans = parsed
+        lines: list[str] = []
+        for chapter, first, chapter2, last in spans:
+            lines += self._verses_between(book, chapter, first, chapter2, last)
+        return lines
+
+    def _verses_between(self, book: str, chapter: int, first: int, chapter2: int, last: int) -> list[str]:
+        found = self._book_verses(book)
+        if not found or chapter2 < chapter:
+            return []
+        count, verses = found
+        lines: list[str] = []
+        for number in range(chapter, chapter2 + 1):
+            if not 1 <= number <= count:
+                return []
+            chunk = verses(number)
+            start = first if number == chapter else 1
+            end = last if number == chapter2 else len(chunk)
+            if start < 1 or end > len(chunk) or start > end:
+                return []
+            if chapter != chapter2:
+                lines.append(f"{book} {number}")
+            lines += [f"{i}. {chunk[i - 1]}" for i in range(start, end + 1)]
+        return lines
+
     def readings(self, data: dict) -> list[Segment]:
         out = []
         for reading in data.get("readings") or []:
@@ -383,6 +515,14 @@ class Library:
                 title = strip_html(story.get("title", "")) or "The Life of a Saint"
                 out.append(Segment("life", title, cut([title + "."] + text.splitlines())))
         return out
+
+    def day_lives(self, civil: dt.date, data: dict | None = None) -> list[Segment]:
+        """The lives of a civil day's saints: the Prologue of Ohrid if it is on disk, else orthocal's."""
+        j = civil - dt.timedelta(days=13)
+        mine = [w for w in self.works.get("prologue_lives") or [] if w.get("when") == f"{j.month}/{j.day}"]
+        if mine:
+            return [Segment("life", w["title"], [f"From the Prologue of Ohrid: {w['title']}."] + w["text"]) for w in mine]
+        return self.lives(data) if data else []
 
     def _days_index(self) -> dict:
         """The old-calendar days on disk (re-read when more have been fetched)."""
@@ -489,6 +629,50 @@ class Library:
                 elif book in self.kjv:
                     out.append({"name": book, "group": group, "chapters": len(self.kjv[book])})
         return out
+
+    def _book_verses(self, book: str):
+        """The chapters of one book as (count, verse_list). verse_list(n) is 1-based."""
+        if book == "Psalms" and self.psalter:
+            def verses(n, psalter=self.psalter):
+                return list((psalter.get(str(n)) or {}).get("verses") or [])
+            return len(self.psalter), verses
+        if book in self.lxx:
+            chapters = self.lxx[book]
+            return len(chapters), lambda n, chapters=chapters: chapters[n - 1]
+        if book in self.kjv:
+            chapters = self.kjv[book]
+            return len(chapters), lambda n, chapters=chapters: chapters[n - 1]
+        return None
+
+    def bible_openings(self, book: str) -> list[dict]:
+        """Each chapter's number and opening line, for the chapter wheel."""
+        found = self._book_verses(book)
+        if not found:
+            return []
+        count, verses = found
+        out = []
+        for n in range(1, count + 1):
+            lines = verses(n)
+            out.append({"n": n, "first": (lines[0] if lines else "").strip()[:90]})
+        return out
+
+    def bible_search(self, book: str, query: str, limit: int = 40) -> list[dict]:
+        """Verses in one book that contain the words, in chapter order."""
+        needle = " ".join(query.split()).casefold()
+        if len(needle) < 2:
+            return []
+        found = self._book_verses(book)
+        if not found:
+            return []
+        count, verses = found
+        hits = []
+        for n in range(1, count + 1):
+            for i, text in enumerate(verses(n), start=1):
+                if needle in text.casefold():
+                    hits.append({"chapter": n, "verse": i, "text": text})
+                    if len(hits) >= limit:
+                        return hits
+        return hits
 
     def bible_segment(self, book: str, n: int) -> Segment | None:
         """One chapter of any book, to read or to hear."""
@@ -635,22 +819,14 @@ class Library:
             if data:
                 segments.append(self.calendar_segment(data))
                 segments += self.readings(data)
-            j = civil - dt.timedelta(days=13)
-            saints = [w for w in self.works.get("prologue_lives") or [] if w.get("when") == f"{j.month}/{j.day}"]
-            segments += [Segment("life", w["title"], [f"From the Prologue of Ohrid: {w['title']}."] + w["text"]) for w in saints]
-            if not saints and data:
-                segments += self.lives(data)
+            segments += self.day_lives(civil, data)
             return segments, (self.prayer("closing") if cfg["prayers"] else None)
         if kind == "morning":
             data = self.day(civil)
             if data:
                 segments.append(self.calendar_segment(data))
                 segments += self.readings(data)
-            j = civil - dt.timedelta(days=13)
-            today = [w for w in self.works.get("prologue_lives") or [] if w.get("when") == f"{j.month}/{j.day}"]
-            segments += [Segment("life", w["title"], [f"From the Prologue of Ohrid: {w['title']}."] + w["text"]) for w in today]
-            if not today and data:
-                segments += self.lives(data)
+            segments += self.day_lives(civil, data)
             # The morning is the day itself, read through: nothing added, nothing cut.
             return segments, (self.prayer("closing") if cfg["prayers"] else None)
         closing = self.prayer("closing") if cfg["prayers"] else None

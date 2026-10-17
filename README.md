@@ -34,6 +34,8 @@ A locked break can always be ended:
 - The lock **releases itself** a couple of minutes after the break should have ended, whatever happens, and it dies with the app.
 - Breaks can be paused from the window or the tray at any time.
 
+**Extreme mode** (Settings → Break): the only way out of a break is to wait. No Snooze, no Stop, no emergency exit, no Quit, and the break settings are locked while it is on. A second process brings Reader back if it is closed, and a break that was cut off starts over. Extreme can be turned off in Settings between breaks. Ctrl+Alt+Del still works, and each lock still releases itself when the break is over.
+
 ## What it reads
 
 Bundled, all public domain:

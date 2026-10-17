@@ -11,7 +11,7 @@ import tkinter as tk
 
 from PIL import Image, ImageTk
 
-from . import activity, audio, overlay, settings, speech, webui
+from . import activity, audio, guard, overlay, settings, speech, webui
 from . import library as lib
 from . import theme as t
 from .library import Library
@@ -53,8 +53,27 @@ def spell_time(seconds: float) -> str:
     return " and ".join(parts)
 
 
+ANNOUNCE_AFTER = 120  # seconds at the computer before the day's announcement
+
+
+def announcement(ahead: dict, today: dict | None) -> list[str]:
+    """The day's announcement, a sentence a line: today's feast, then the days to the next."""
+    lines = []
+    name = ((today or {}).get("feasts") or [""])[0].strip()
+    if name and (today.get("feast_level") or 0) >= 6:
+        lines.append(f"Today is the feast: {name}.")
+    feast, season = ahead.get("feast"), ahead.get("season")
+    if feast:
+        days = feast["days"]
+        lines.append(f"Tomorrow is the {feast['name']}." if days == 1 else f"{days} days until the {feast['name']}.")
+    if season:
+        days = season["days"]
+        lines.append(f"The {season['name']} begins tomorrow." if days == 1 else f"The {season['name']} begins in {days} days.")
+    return lines
+
+
 class App:
-    def __init__(self, start_hidden: bool = False) -> None:
+    def __init__(self, start_hidden: bool = False, show_event: str | None = None) -> None:
         self.cfg = settings.load()
         self.state = settings.load_state()
         self.tracker = activity.Tracker(self.state)
@@ -63,6 +82,7 @@ class App:
         self.session: Session | None = None
         self.screen = None
         self.lock: Lock | None = None
+        self.strict = False  # this reading cannot be stopped (fixed when it starts)
         self.notice = None
         self.tray = None
         self._stop = threading.Event()
@@ -73,14 +93,20 @@ class App:
         root.withdraw()
         self._icon = ImageTk.PhotoImage(angel_image(64))
         root.iconphoto(True, self._icon)
-        self.web = webui.Server(self.web_state, self.web_call, self.today_icon, self.web_month, self.web_bible)
+        self.web = webui.Server(self.web_state, self.web_call, self.today_icon, self.web_month, self.web_bible, self.web_lives, self.web_passage)
+        webui.close_stale_windows()
         if not start_hidden:
             self.web.open_window()
         threading.Thread(target=self.library.prefetch, args=(self._stop,), name="reader-prefetch", daemon=True).start()
         threading.Thread(target=self._fetch_today, daemon=True).start()
         self._tray()
+        if show_event:
+            threading.Thread(target=self._wait_for_show, args=(show_event,), name="reader-show", daemon=True).start()
         root.after(500, self._pump)
         root.after(1000, self._tick)
+        if self.cfg["extreme"]:
+            root.after(1000, self._guard)
+            root.after(3000, self._resume)
 
     # ------------------------------------------------------------ the window (webui)
 
@@ -95,9 +121,13 @@ class App:
         info = lib.summary(data) if data else {}
         reading = self.session is not None
         if reading:
-            headline, sub = self.session.title or "Reading", "Stop when you need to."
+            headline = self.session.title or "Reading"
+            sub = "Sit with it until the end." if self.strict else "Stop when you need to."
+        elif self.cfg["extreme"]:
+            headline = f"Next break in {spell_time(self.tracker.until_break(self.cfg))}"
+            sub = "Extreme: the breaks come, always."
         elif not self.cfg["enabled"]:
-            headline, sub = "Breaks are paused", "Readings are still a click away."
+            headline, sub = "Automatic readings are off", "Readings are still a click away."
         else:
             headline = f"Next break in {spell_time(self.tracker.until_break(self.cfg))}"
             sub = f"{spell_time(self.tracker.state.get('active', 0))} of work since the last break"
@@ -112,7 +142,7 @@ class App:
                 "today": info,
                 "headline": headline, "sub": sub,
                 "progress": 0 if reading else min(1.0, self.tracker.state.get("active", 0) / work),
-                "enabled": self.cfg["enabled"], "reading": reading,
+                "enabled": self.cfg["enabled"], "reading": reading, "strict": reading and self.strict,
                 # the clock: seconds to the next reading, or seconds left in this one
                 "until": self.tracker.until_break(self.cfg),
                 "left": max(0.0, self.session.end - time.monotonic()) if reading and hasattr(self.session, "end") else 0.0,
@@ -124,14 +154,40 @@ class App:
             },
         }
 
-    def web_bible(self, book: str | None, chapter: int | None):
-        """The Bible for the window: the books, or one chapter's verses."""
+    def web_bible(self, book: str | None, chapter: int | None, query: str | None = None, openings: bool = False):
+        """The Bible for the window: the books, one chapter, a search, or the chapter openings."""
         if not book:
             return {"books": self.library.bible_books()}
+        if query:
+            return {"hits": self.library.bible_search(book, query)}
+        if openings:
+            return {"openings": self.library.bible_openings(book)}
         seg = self.library.bible_segment(book, chapter or 1)
         if seg is None:
             return {"title": "", "verses": []}
         return {"title": seg.title, "verses": seg.lines[1:]}
+
+    def _lives_of(self, iso: str) -> list:
+        try:
+            civil = dt.date.fromisoformat(iso)
+        except ValueError:
+            return []
+        return self.library.day_lives(civil, self.library.day(civil, fetch=False))
+
+    def web_lives(self, iso: str) -> dict:
+        """The full lives of a day's saints, for the window to show."""
+        return {"lives": [{"title": seg.title, "lines": seg.lines[1:]} for seg in self._lives_of(iso)]}
+
+    def web_passage(self, iso: str, index: int) -> dict:
+        """One Gospel (or other reading) opened from the calendar."""
+        try:
+            civil = dt.date.fromisoformat(iso)
+        except ValueError:
+            return {"title": "", "verses": []}
+        page = self.library.passage_page(civil, index)
+        if not page:
+            return {"title": "", "verses": []}
+        return {"title": page["title"], "citation": page["citation"], "verses": page["verses"]}
 
     def web_month(self, year: int, month: int) -> dict:
         days = self.library.civil_month(year, month)
@@ -145,8 +201,9 @@ class App:
         return {"year": year, "month": month, "name": dt.date(year, month, 1).strftime("%B %Y"),
                 "first": dt.date(year, month, 1).weekday(), "days": out, "ahead": self._ahead()}
 
-    def _ahead(self) -> dict:
-        """The next great feast and the next fast season, from today, with days to go."""
+    def _ahead(self, rank: int = 7) -> dict:
+        """The next great feast (orthocal rank `rank` or higher; 7 = the Twelve and Pascha)
+        and the next fast season, from today, with days to go."""
         today = dt.date.today()
         feast = season = None
         y, m = today.year, today.month
@@ -161,7 +218,7 @@ class App:
                 seasonal = name and name.lower() not in ("fast", "no fast", "fast free")
                 if civil == today:
                     current_season = name if seasonal else None
-                if feast is None and info["feast"] == "great" and civil > today:
+                if feast is None and (data.get("feast_level") or 0) >= rank and civil > today:
                     feast = {"name": (info["feasts"] or [info["title"]])[0], "iso": civil.isoformat(),
                              "days": (civil - today).days}
                 if season is None and seasonal and name != current_season and civil > today:
@@ -176,8 +233,12 @@ class App:
         if kind == "set" and payload.get("key") in settings.DEFAULTS:
             self.events.put(("set", (payload["key"], payload.get("value"))))
         elif kind == "do":
-            if payload.get("action") == "text":
+            if payload.get("action") == "life":
+                self.events.put(("do", ("life", str(payload.get("day", "")), int(payload.get("i") or 0))))
+            elif payload.get("action") == "text":
                 self.events.put(("do", ("text", str(payload.get("book", "")), int(payload.get("chapter") or 0))))
+            elif payload.get("action") == "passage":
+                self.events.put(("do", ("passage", str(payload.get("day", "")), int(payload.get("i") or 0))))
             else:
                 self.events.put(("do", payload.get("action") if not payload.get("day") else ("day", payload["day"])))
 
@@ -186,6 +247,20 @@ class App:
         try:
             value = kind(value) if kind is not bool else bool(value)
         except (TypeError, ValueError):
+            return
+        if self.cfg["extreme"] and key in settings.FROZEN:
+            log.info("set %s refused: extreme", key)
+            return
+        if key == "extreme":
+            if self.session is not None:
+                log.info("extreme refused: in a reading")
+            elif value:
+                self.go_extreme()
+            else:
+                self.cfg["extreme"] = False  # the guard sees it and leaves
+                settings.save(self.cfg)
+                log.info("extreme mode off")
+                self._tray_update()
             return
         old_autostart = self.cfg["autostart"]
         self.cfg[key] = value
@@ -201,6 +276,16 @@ class App:
             seg = self.library.bible_segment(action[1], action[2])
             if seg is not None:
                 self.start("text", "listen", items=[seg])
+            return
+        if isinstance(action, tuple) and action[0] == "passage":  # Read Aloud from a Gospel link
+            seg = self.library.passage_segment(action[1], action[2])
+            if seg is not None:
+                self.start("text", "listen", items=[seg])
+            return
+        if isinstance(action, tuple) and action[0] == "life":  # Read Aloud from a saint's life
+            lives = self._lives_of(action[1])
+            if 0 <= action[2] < len(lives):
+                self.start("text", "listen", items=[lives[action[2]]])
             return
         if isinstance(action, tuple) and action[0] == "day":  # read a chosen calendar day
             try:
@@ -221,7 +306,22 @@ class App:
         elif action == "hear":
             self.test_voice()
 
+    def go_extreme(self) -> None:
+        """Breaks lock, cannot be stopped, and start over if Reader is closed; the guard keeps it running."""
+        self.cfg.update(settings.EXTREME)
+        settings.save(self.cfg)
+        try:
+            settings.set_autostart(True)
+        except OSError:
+            log.exception("autostart")
+        log.info("extreme mode on")
+        self._tray_update()
+        self.events.put(("guard", None))
+
     def set_enabled(self, on: bool) -> None:
+        if self.cfg["extreme"] and not on:
+            log.info("automatic off refused: extreme")
+            return
         self.cfg["enabled"] = on
         if on:
             self.tracker.took_break()  # a fresh two hours, not an instant break
@@ -236,14 +336,15 @@ class App:
         except ImportError:
             return
         item = pystray.MenuItem
+        free = lambda i: not self.cfg["extreme"]  # extreme: no off switch, no Stop, no Quit
         menu = pystray.Menu(
             item("Open", lambda: self.events.put(("show", None)), default=True),
-            item("Breaks enabled", lambda: self.events.put(("toggle", None)), checked=lambda i: self.cfg["enabled"]),
+            item("Automatic readings", lambda: self.events.put(("toggle", None)), checked=lambda i: self.cfg["enabled"], visible=free),
             item("Take a break now", lambda: self.events.put(("start", "break"))),
             item("Listen while I work", lambda: self.events.put(("listen", None))),
-            item("Stop the reading", lambda: self.events.put(("stop", None))),
+            item("Stop the reading", lambda: self.events.put(("stop", None)), visible=free),
             pystray.Menu.SEPARATOR,
-            item("Quit", lambda: self.events.put(("quit", None))),
+            item("Quit", lambda: self.events.put(("quit", None)), visible=free),
         )
         self.tray = pystray.Icon("OrthodoxReader", angel_image(64), "Reader", menu)
         self.tray.run_detached()
@@ -254,6 +355,17 @@ class App:
 
     def show(self) -> None:
         self.web.open_window()
+
+    def _wait_for_show(self, name: str) -> None:
+        """Reader launched again (the taskbar pin, the Start menu): open the window."""
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateEventW.restype = ctypes.c_void_p
+        event = ctypes.c_void_p(kernel32.CreateEventW(None, False, False, name))  # auto-reset
+        while not self._stop.is_set():
+            if kernel32.WaitForSingleObject(event, 1000) == 0:  # WAIT_OBJECT_0
+                self.events.put(("show", None))
 
     # ------------------------------------------------------------ the loop
 
@@ -288,7 +400,17 @@ class App:
                     self._do(value)
                 elif kind == "today":
                     pass
+                elif kind == "announce":
+                    overlay.Toast(self.root, value[0], " ".join(value[1:]), seconds=20)
+                elif kind == "guard":
+                    self._guard()
                 elif kind == "quit":
+                    if self.cfg["extreme"]:
+                        log.info("quit refused: extreme")
+                        continue
+                    if self.session is not None and self.strict:
+                        log.info("quit refused: strict reading")
+                        continue
                     self.quit()
                     return
         except queue.Empty:
@@ -301,6 +423,7 @@ class App:
         if self.session is None:
             for event in self.tracker.tick(now, idle, self.cfg):
                 self._on(event)
+            self._maybe_announce(idle)
         else:
             self.tracker.state["last_seen"] = now - min(idle, 60)  # the break is not an absence
         settings.save_state(self.tracker.state)
@@ -311,7 +434,7 @@ class App:
         if event == "first_day":  # just installed: learn today, but no morning session yet
             threading.Thread(target=self._fetch_today, daemon=True).start()
             return
-        if event == "new_day" and self.cfg.get("fast_reminder", True):
+        if event == "new_day" and self.cfg["enabled"] and self.cfg.get("fast_reminder", True):
             self.root.after(8000, self._fast_note)
         if event == "new_day":
             threading.Thread(target=self._fetch_today, daemon=True).start()
@@ -322,6 +445,27 @@ class App:
         elif event == "break" and self.cfg["enabled"] and self.notice is None:
             self.start("break", self.cfg["mode"])
 
+    def _guard(self) -> None:
+        """Extreme: keep the guard running; it brings Reader back if Reader is killed, and we bring it back."""
+        if not self.cfg["extreme"]:
+            return
+        if not guard.alive():
+            guard.spawn("--guard")
+        if not self._stop.is_set():
+            self.root.after(guard.POLL * 1000, self._guard)
+
+    def _resume(self) -> None:
+        """Extreme: a break or morning that was cut off (killed, logged off) starts again from the top."""
+        owed = self.tracker.state.get("owed")
+        if not owed or self.session is not None:
+            return
+        kind, since = owed
+        if time.time() - since > self.cfg["sleep_hours"] * 3600:  # slept since: the morning takes its place
+            self.tracker.state.pop("owed", None)
+            return
+        log.info("resuming a %s that was cut off", kind)
+        self.start(kind, "lock")
+
     def _fast_note(self) -> None:
         """At the start of the day: is today a fast day? A quiet note that leaves by itself."""
         data = self.library.day(dt.date.today(), fetch=False)
@@ -329,6 +473,28 @@ class App:
             return
         info = lib.summary(data)
         overlay.Toast(self.root, "Today: " + info["fast_text"], info.get("title", ""))
+
+    def _maybe_announce(self, idle: float) -> None:
+        """Once a day, a couple of minutes into using the computer (after the morning, if any)."""
+        st = self.tracker.state
+        today = dt.date.today().isoformat()
+        if (not self.cfg["announce"] or self.notice is not None or st.get("announced") == today
+                or idle > 30 or st.get("active", 0) < ANNOUNCE_AFTER):
+            return
+        st["announced"] = today
+
+        def run():
+            try:
+                lines = announcement(self._ahead(rank=7), self.library.day(dt.date.today()))
+            except Exception:
+                log.exception("announce")
+                return
+            if lines:
+                log.info("announce: %s", " ".join(lines))
+                self.events.put(("announce", lines))
+                self.say(" ".join(lines))
+
+        threading.Thread(target=run, daemon=True).start()
 
     def _heads_up(self, text: str, kind: str) -> None:
         if self.notice is not None:
@@ -343,7 +509,7 @@ class App:
             self.notice = None
             self.tracker.snooze(time.time(), 10)
 
-        self.notice = overlay.Notice(self.root, seconds, text, snooze, now)
+        self.notice = overlay.Notice(self.root, seconds, text, None if self.cfg["extreme"] else snooze, now)
         if kind == "morning":  # the morning session starts by itself after the countdown
             self.root.after(seconds * 1000, lambda: self.notice is not None and (self.notice.close(), now()))
         else:
@@ -367,19 +533,26 @@ class App:
             spoken = sum(lib.speaking_time(s) + lib.GAP for s in planned) + (lib.speaking_time(closing) if closing else 0)
             minutes = max(5.0, spoken / 60 + 3)
         end = time.monotonic() + minutes * 60
+        # strict: breaks and the morning only; a chapter chosen to read aloud can always be stopped
+        self.strict = self.cfg["strict"] and kind != "text"
+        emergency = self.cfg["emergency_exit"] and not self.strict
         if mode == "lock":
-            hint = "Hold Ctrl+Alt+Shift+End for 3 seconds to end early" if self.cfg["emergency_exit"] else ""
+            hint = "Hold Ctrl+Alt+Shift+End for 3 seconds to end early" if emergency else ""
             self.screen = overlay.Overlay(self.root, self.cfg["screen"], overlay.pick_icon(self.library.headline(dt.date.today())),
                                           end, hide_cursor=True)
             self.screen.set_hint(hint)
-            self.lock = Lock(minutes * 60 + 150, self.cfg["emergency_exit"], lambda: self.events.put(("emergency", None)))
+            # the dead-man timer stays even when strict: the lock always ends by itself
+            self.lock = Lock(minutes * 60 + 150, emergency, lambda: self.events.put(("emergency", None)))
             self.lock.start()
         elif self.cfg["read_along"]:
-            self.screen = overlay.ReadAlong(self.root, end, self.stop_session)
+            self.screen = overlay.ReadAlong(self.root, end, self.stop_session, strict=self.strict)
         if kind == "text":  # as long as the chapter takes (a long psalm runs past a break)
             minutes = max(5.0, sum(lib.speaking_time(s) for s in items or []) / 60 + 2)
         self.session = Session(kind, self.cfg, self.library, self._post, minutes, civil=civil, items=items)
         self.session.start()
+        if self.cfg["extreme"] and kind in ("break", "morning"):
+            self.tracker.state["owed"] = [kind, time.time()]  # killed before the end: it starts over
+            settings.save_state(self.tracker.state)
 
     def _post(self, kind: str, value: str) -> None:
         if kind == "title" and self.session is not None:
@@ -387,6 +560,9 @@ class App:
         self.events.put((kind, value))
 
     def stop_session(self) -> None:
+        if self.session is not None and self.strict:
+            log.info("stop refused: strict reading")
+            return
         if self.session is not None:
             self.session.stop()
         else:
@@ -400,25 +576,27 @@ class App:
             self.screen.close()
             self.screen = None
         self.session = None
+        self.strict = False
+        self.tracker.state.pop("owed", None)
         self.tracker.took_break()
         settings.save_state(self.tracker.state)
 
-    def test_voice(self) -> None:
+    def say(self, text: str) -> None:
+        """Speak a short line and wait for it to finish (call off the Tk thread)."""
         cfg = dict(self.cfg)
+        try:
+            path = speech.Voice(cfg).make(text)
+            sound = audio.Sound(path, cfg["voice_volume"])
+            sound.play()
+            time.sleep(0.2)
+            while sound.playing():
+                time.sleep(0.1)
+            sound.close()
+        except Exception:
+            log.exception("say")
 
-        def run():
-            try:
-                path = speech.Voice(cfg).make("Glory to Thee, our God, glory to Thee.")
-                sound = audio.Sound(path, cfg["voice_volume"])
-                sound.play()
-                time.sleep(0.2)
-                while sound.playing():
-                    time.sleep(0.1)
-                sound.close()
-            except Exception:
-                log.exception("test voice")
-
-        threading.Thread(target=run, daemon=True).start()
+    def test_voice(self) -> None:
+        threading.Thread(target=self.say, args=("Glory to Thee, our God, glory to Thee.",), daemon=True).start()
 
     def quit(self) -> None:
         self._stop.set()

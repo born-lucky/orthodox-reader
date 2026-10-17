@@ -44,6 +44,58 @@ def test_pascha_2027_and_lent():
     assert library.summary(lib.civil_month(2027, 4)[7])["fast"] != "none"  # a Wednesday in Lent
 
 
+def test_scripture_spans_read_lectionary_citations():
+    assert library.scripture_spans("Luke 5.1-11") == ("Luke", [(5, 1, 5, 11)])
+    assert library.scripture_spans("Mark 6.54-7.8") == ("Mark", [(6, 54, 7, 8)])
+    assert library.scripture_spans("2 Corinthians 11.31-12.9") == ("2 Corinthians", [(11, 31, 12, 9)])
+    assert library.scripture_spans("") is None
+
+
+def test_commemorations_list_every_name_once():
+    """Feasts, then saints. A repeated name is kept once. A Sunday title is not a saint."""
+    assert library.commemorations({
+        "feasts": ["Ven. Chariton the Confessor", ""],
+        "saints": ["Ven. Chariton the Confessor", "Holy Prophet Baruch"],
+        "titles": ["19th Sunday after Pentecost"],
+    }) == ["Ven. Chariton the Confessor", "Holy Prophet Baruch"]
+
+
+def test_october_11_names_everyone_and_opens_the_gospels():
+    """Civil 11 October 2026: Chariton, Baruch, and Vatslav, and each Gospel can be read."""
+    civil = dt.date(2026, 10, 11)
+    data = lib.day(civil, fetch=False)
+    assert data is not None
+    names = library.commemorations(data)
+    assert names == [
+        "Ven. Chariton the Confessor",
+        "Holy Prophet Baruch (6th c. BC)",
+        "Holy Martyr Vatslav (Wenceslas), King of the Czechs (929)",
+    ]
+    assert "19th Sunday after Pentecost" not in names
+    gospels = [r for r in library.reading_links(data) if r["gospel"]]
+    assert [r["display"] for r in gospels] == ["John 20.11-18", "Luke 5.1-11", "Luke 6.17-23"]
+    holy = lib.passage_page(civil, next(r["i"] for r in gospels if r["display"] == "Luke 5.1-11"))
+    assert holy["title"] == "The Reading of the Holy Gospel"
+    assert holy["verses"][0].startswith("1. ")
+    assert "Gennesaret" in holy["verses"][0]
+    matins = lib.passage_page(civil, next(r["i"] for r in gospels if "Matins" in r["source"]))
+    assert matins["title"] == "Matins Gospel"
+    assert "sepulchre" in matins["verses"][0]
+    chariton = lib.passage_page(civil, next(r["i"] for r in gospels if r["display"] == "Luke 6.17-23"))
+    assert "St Chariton" in chariton["citation"]
+
+
+def test_month_summary_carries_the_names_and_the_gospel_link():
+    info = library.summary(lib.civil_month(2026, 10)[11])
+    assert info["commemorations"][:3] == [
+        "Ven. Chariton the Confessor",
+        "Holy Prophet Baruch (6th c. BC)",
+        "Holy Martyr Vatslav (Wenceslas), King of the Czechs (929)",
+    ]
+    assert any(r["gospel"] and r["display"] == "Luke 5.1-11" for r in info["readings"])
+    assert all(isinstance(r, dict) and "display" in r for r in info["readings"])
+
+
 def test_day_plan_reads_that_day():
     cfg = {"prayers": True, "content": "mixed", "hours": False}
     segments, closing = lib.plan("day", cfg, 30, civil=dt.date(2026, 10, 14))

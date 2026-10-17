@@ -107,6 +107,21 @@ def test_bundled_bible_and_prayers():
     assert lib.chapter("Psalms", 51).title == "Psalm 51 (50 in the Septuagint)"
 
 
+def test_bible_search_is_one_book_and_chapters_open():
+    lib = library.Library()
+    hits = lib.bible_search("John", "In the beginning")
+    assert hits and hits[0] == {"chapter": 1, "verse": 1, "text": hits[0]["text"]}
+    assert hits[0]["text"].startswith("In the beginning")
+    assert all(h["chapter"] <= 21 for h in hits)
+    assert lib.bible_search("John", "a") == []
+    assert lib.bible_search("No Such Book", "the") == []
+    openings = lib.bible_openings("John")
+    assert len(openings) == 21 and openings[0]["n"] == 1 and openings[0]["first"].startswith("In the beginning")
+    if not lib.psalter:
+        psalms = lib.bible_search("Psalms", "Have mercy upon me")
+        assert psalms and psalms[0]["chapter"] == 51 and psalms[0]["verse"] == 1
+
+
 def test_waking_up_after_six_hours():
     """Six hours or more away (asleep, the PC off or sleeping) is a new morning; less is a rest."""
     cfg = dict(CFG, sleep_hours=6)
@@ -145,3 +160,98 @@ def test_breaks_are_lives_of_the_saints_by_default():
     lib = library.Library()
     segments, _ = lib.plan("break", dict(settings.DEFAULTS), 15)
     assert all(s.kind in ("prayer", "life") for s in segments)
+
+
+class _Stub:
+    """Just enough of App for stop_session/_on, without Tk."""
+
+    def __init__(self, strict: bool, enabled: bool = True):
+        from reader import settings
+        self.cfg = dict(settings.DEFAULTS, enabled=enabled)
+        self.strict = strict
+        self.stopped = False
+        self.notes = []
+        stub = self
+
+        class S:
+            def stop(self):
+                stub.stopped = True
+
+        self.session = S()
+        self.root = type("R", (), {"after": lambda _, ms, fn: stub.notes.append(fn)})()
+
+    def _ended(self, reason):
+        self.session = None
+
+    def _fetch_today(self):
+        pass
+
+    def _heads_up(self, text, kind):
+        self.notes.append(kind)
+
+
+def test_strict_reading_cannot_be_stopped():
+    from reader.app import App
+    app = _Stub(strict=True)
+    App.stop_session(app)
+    assert not app.stopped and app.session is not None
+    app = _Stub(strict=False)
+    App.stop_session(app)
+    assert app.stopped
+
+
+def test_automatic_off_means_no_fast_day_note():
+    import threading
+    from reader.app import App
+    app = _Stub(strict=False, enabled=False)
+    app.session = None
+    real = threading.Thread
+    threading.Thread = lambda *a, **k: type("T", (), {"start": lambda self: None})()
+    try:
+        App._on(app, "new_day")
+    finally:
+        threading.Thread = real
+    assert app.notes == []
+
+
+def test_extreme_holds_its_break_settings(tmp_path, monkeypatch):
+    from reader import settings
+    monkeypatch.setattr(settings, "SETTINGS", tmp_path / "settings.json")
+    settings.save(dict(settings.DEFAULTS, extreme=True, strict=False, enabled=False, emergency_exit=True))
+    cfg = settings.load()
+    assert cfg["extreme"] and cfg["strict"] and cfg["enabled"] and cfg["mode"] == "lock" and not cfg["emergency_exit"]
+
+
+def test_extreme_freezes_what_could_skip_a_break(monkeypatch):
+    from reader import settings
+    from reader.app import App
+    app = _Stub(strict=True)
+    app.cfg["extreme"] = True
+    monkeypatch.setattr(settings, "save", lambda cfg: None)
+    for key, value in (("enabled", False), ("strict", False), ("mode", "listen"),
+                       ("break_minutes", 1), ("work_minutes", 480), ("autostart", False)):
+        before = app.cfg[key]
+        App._set(app, key, value)
+        assert app.cfg[key] == before, key
+    App._set(app, "theme", "dark")  # the look is still yours
+    assert app.cfg["theme"] == "dark"
+    App.set_enabled(app, False)
+    assert app.cfg["enabled"]
+    App._set(app, "extreme", False)  # not in the middle of a break
+    assert app.cfg["extreme"]
+    app.session = None
+    app._tray_update = lambda: None
+    App._set(app, "extreme", False)  # between breaks: a normal switch
+    assert not app.cfg["extreme"]
+
+
+def test_announcement_counts_the_days():
+    from reader.app import announcement
+
+    ahead = {"feast": {"name": "Nativity of Christ", "days": 12},
+             "season": {"name": "Nativity Fast", "days": 1}}
+    today = {"feast_level": 6, "feasts": ["Protection of the Most-Holy Theotokos"]}
+    assert announcement(ahead, today) == ["Today is the feast: Protection of the Most-Holy Theotokos.",
+                                          "12 days until the Nativity of Christ.",
+                                          "The Nativity Fast begins tomorrow."]
+    assert announcement({"feast": None, "season": None}, {"feast_level": 2, "feasts": ["St X"]}) == []

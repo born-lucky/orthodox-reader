@@ -170,7 +170,7 @@ class Overlay:
 class ReadAlong:
     """The small caption window for listen mode."""
 
-    def __init__(self, root: tk.Tk, end: float, on_stop) -> None:
+    def __init__(self, root: tk.Tk, end: float, on_stop, strict: bool = False) -> None:
         self.end = end
         win = self.win = tk.Toplevel(root)
         win.overrideredirect(True)
@@ -188,9 +188,10 @@ class ReadAlong:
         self.title.pack(side="left", fill="x", expand=True)
         self.clock = tk.Label(top, text="", fg=t.FADED, bg=t.PAGE, font=(SERIF, 9))
         self.clock.pack(side="left", padx=6)
-        stop = tk.Label(top, text="✕", fg=t.FADED, bg=t.PAGE, font=(SERIF, 11), cursor="hand2")
-        stop.pack(side="left")
-        stop.bind("<Button-1>", lambda e: on_stop())
+        if not strict:  # strict: no way out, sit through it
+            stop = tk.Label(top, text="✕", fg=t.FADED, bg=t.PAGE, font=(SERIF, 11), cursor="hand2")
+            stop.pack(side="left")
+            stop.bind("<Button-1>", lambda e: on_stop())
         self.caption = tk.Label(frame, text="", fg=t.INK, bg=t.PAGE, font=(SERIF, 12), wraplength=w - 30,
                                 justify="left", anchor="nw")
         self.caption.pack(fill="both", expand=True, padx=14, pady=(6, 0))
@@ -249,6 +250,8 @@ class Notice:
         row = tk.Frame(frame, bg=t.PAGE)
         row.pack(fill="x", padx=12, pady=8)
         for label, action in (("Begin now", on_now), ("Snooze 10 min", on_snooze)):
+            if action is None:  # extreme: no Snooze
+                continue
             b = tk.Label(row, text=label, fg=t.RED, bg=t.PAGE_DEEP, font=(SERIF, 10), padx=10, pady=3, cursor="hand2")
             b.pack(side="left", padx=4)
             b.bind("<Button-1>", lambda e, a=action: (self.close(), a()))
@@ -276,14 +279,18 @@ class Toast:
         win.overrideredirect(True)
         win.attributes("-topmost", True)
         win.configure(bg=t.PAGE)
-        w, h = 380, 84 if sub else 58
-        _, _, right, bottom = work_area()
-        win.geometry(f"{w}x{h}+{right - w - 18}+{bottom - h - 18}")
+        w = 380
         frame = tk.Frame(win, bg=t.PAGE, highlightbackground=t.INK, highlightthickness=1)
         frame.pack(fill="both", expand=True)
-        tk.Label(frame, text=text, fg=t.INK, bg=t.PAGE, font=(t.RUBRIC, 12, "bold"), anchor="w").pack(fill="x", padx=14, pady=(12, 0))
+        tk.Label(frame, text=text, fg=t.INK, bg=t.PAGE, font=(t.RUBRIC, 12, "bold"), anchor="w", justify="left",
+                 wraplength=w - 30).pack(fill="x", padx=14, pady=(12, 0 if sub else 12))
         if sub:
-            tk.Label(frame, text=sub, fg=t.FADED, bg=t.PAGE, font=(t.RUBRIC, 10), anchor="w").pack(fill="x", padx=14, pady=(2, 10))
+            tk.Label(frame, text=sub, fg=t.FADED, bg=t.PAGE, font=(t.RUBRIC, 10), anchor="w", justify="left",
+                     wraplength=w - 30).pack(fill="x", padx=14, pady=(2, 10))
+        win.update_idletasks()
+        h = win.winfo_reqheight()
+        _, _, right, bottom = work_area()
+        win.geometry(f"{w}x{h}+{right - w - 18}+{bottom - h - 18}")
         for widget in (win, frame):
             widget.bind("<Button-1>", lambda e: self.close())
         win.after(seconds * 1000, self.close)
